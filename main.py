@@ -5,6 +5,8 @@ from epc_lib import epc_server, epc_image
 from imgProc import imgProcScale
 from imager import imager
 
+
+#test for gian
 ### Main Objects
 #epc_server('192.168.7.2') # USB connection
 server  		=  epc_server('192.168.1.80') # Ethernet connection

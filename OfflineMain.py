@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 
 from epc_lib import epc_math
+from imgProc import imgProcScale
 
 path = r'D:\HTW\Projektarbeit\300u_int_time_dcs_forward_90Deg.h5'
 
@@ -46,4 +47,11 @@ quality, noise = epc_math.check_signal_quality(amplitude[0], gray, exposure)
 
 print(quality, noise)
 
+# convert the images to height information
+distance2 = [-x + x.max() for x in distance]
+
+# show the shifting center of gravity in the image stream
+for image in distance2:
+    cog = imgProcScale.calc_image_cog(image, True)
+    print(cog)
 

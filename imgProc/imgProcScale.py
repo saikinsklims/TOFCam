@@ -1,3 +1,12 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Sep 28 10:22:11 2019
+
+Module containing the image processing algorithms
+
+@author: rjaco
+"""
+
 import cv2
 import numpy as np
 
@@ -67,7 +76,7 @@ def scale_image_rgb(img, autoScale=True, colorMap=True):
 
 def scale_image_gray(img):
     """
-     Rescales the given distance image for for better visibility   
+    Rescales the given distance image for for better visibility.  
 
     Parameters
     ----------
@@ -109,7 +118,6 @@ def calc_image_cog(img, auto_thresh, threshold=None):
         The image moments.
 
     """
-
     if not auto_thresh and not threshold:
         print("""Auto treshold used as no threshold defined. To avoid this
               define threshold.""")

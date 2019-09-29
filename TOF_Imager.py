@@ -9,15 +9,27 @@ Main application script for the ToF Imager
 """
 
 import os, sys
+import numpy as np
 import PyQt5 as Qt
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QCoreApplication
 from PyQt5.QtGui import QImage, QPixmap, QIntValidator
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QLineEdit
+from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5 import uic
 
 import cv2
+from epc_lib import epc_math
+from imgProc import imgProcScale
 
+
+# TODO for testing purposes only
 import pdb
+import h5py
+import time
+from itertools import cycle
+path = r'D:\HTW\Projektarbeit\300u_int_time_dcs_forward_90Deg.h5'
+
+mod_frequ = 20
+exposure = 250
 
 class Thread(QThread):
     """
@@ -40,8 +52,32 @@ class Thread(QThread):
     update_gui = pyqtSignal(int)                # return changed exposure
 
     _auto = False
-    _exposure = 0
+    _exposure = 1
     _update_cam = False
+
+    #TODO for testing purposes only
+    with h5py.File(path, 'r') as f:
+        # List all groups
+        a_group_key = list(f.keys())[0]
+    
+        # Get the data
+        data = list(f[a_group_key])
+
+    # get height and width of images
+    height, _, width = data[0].shape
+    
+    # create an empty offset-images and a random gray image
+    d_offset = np.zeros((height, width))
+    gray = np.random.rand(height, width) * 30
+
+    distance = []
+    phase = []
+    amplitude = []
+    for image in data:
+        tmp1, tmp2 = epc_math.calc_dist_phase(image, mod_frequ, d_offset)
+        distance.append(tmp1)
+        phase.append(tmp2)
+        amplitude.append(epc_math.calc_amplitude(image))
 
     def stop(self):
         """
@@ -72,28 +108,52 @@ class Thread(QThread):
         # connect the slots
         self.update_config.connect(self._update_exposure)
 
+        # TODO for testing only
+        pool = cycle(self.amplitude)
+
+        # pdb.set_trace()
         while self.running:
-            # img = self.cam.getImage()
-            # if img is not None:
-            #     img_view = img.copy()
-            #     cv2.normalize(img, img_view, 0, 255, cv2.NORM_MINMAX)
-            #     img_view = img_view.astype('uint8')
-            #     convertToQtFormat = QImage(img_view, img_view.shape[1],
-            #                                img_view.shape[0], QImage.Format_Grayscale8)
-            #     p = convertToQtFormat.scaled(816, 683, Qt.QtCore.Qt.KeepAspectRatio)
-            #     self.change_pixmap.emit(p)
+            #TODO image capture
+            time.sleep(0.2)
+            img = next(pool)
+
+            if img is not None:
+                img_view = img.copy()
+                img_view = self._exposure * img_view        # FIXME
+
+                # get some quality measures
+                quality, noise = epc_math.check_signal_quality(img_view,
+                                                               self.gray,
+                                                               self._exposure)
+
+                print(self._exposure, quality, noise)
+
+                # normalize gray image and convert to QImage and scale
+                cv2.normalize(img, img_view, 0, 255, cv2.NORM_MINMAX)
+                img_view = img_view.astype('uint8')
+                height, width = img_view.shape
+                convertToQtFormat = QImage(img_view, width, height,
+                                           QImage.Format_Grayscale8)
+                p = convertToQtFormat.scaled(4*width, 4*height,
+                                             Qt.QtCore.Qt.KeepAspectRatio)
+
+                # request an update of the image
+                self.change_pixmap.emit(p)
+
             # check if the exposure settings need to be updated
 
-            #TODO image capture
-
             # if auto exposure
+            # TODO incorperate noise estimate and control that as well
             if self._auto:
-                #TODO auto exposure
+                # increase exposure until pixel intensity is good
+                if quality < 0:
+                    self._exposure += 1
+                elif quality > 0:
+                    self._exposure -= 1
                 self._update_cam = True
 
             if self._update_cam:
                 #TODO change camera settings
-                print("changing exposure to: ", self._exposure)
                 self.update_gui.emit(self._exposure)
                 self._update_cam = False
 
@@ -156,6 +216,19 @@ class App(QMainWindow):
         self.th.update_gui.connect(self._update_exposure_gui)
         self.exposure_LineEdit.editingFinished.connect(self._change_exposure)
         self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
+        self.th.change_pixmap.connect(self.set_image)
+
+    @pyqtSlot(QImage)
+    def set_image(self, image):
+        """Slot that changes the shown image by setting the pixmap.
+
+        Parameters
+        ----------
+        image : QImage
+            The image.
+
+        """
+        self.image_View.setPixmap(QPixmap.fromImage(image))
 
     @pyqtSlot()
     def _change_exposure(self):
@@ -168,7 +241,8 @@ class App(QMainWindow):
 
         """
         value = self.exposure_LineEdit.text()
-        flag = self.auto_exposure_CheckBox.checkState()
+        flag = bool(self.auto_exposure_CheckBox.isChecked())
+        self.exposure_LineEdit.setEnabled(not flag)
 
         # request a change of the configuration
         self.th.update_config.emit(value, flag)

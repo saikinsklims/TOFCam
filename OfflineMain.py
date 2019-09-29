@@ -51,7 +51,14 @@ print(quality, noise)
 distance2 = [-x + x.max() for x in distance]
 
 # show the shifting center of gravity in the image stream
+cogs = []
 for image in distance2:
-    cog = imgProcScale.calc_image_cog(image, True)
-    print(cog)
+    cogs.append(imgProcScale.calc_image_cog(image, True))
+
+cogs = np.array(cogs)
+
+diffs = []
+for i in range(cogs.shape[0] - 5):
+    diffs.append(cogs[i+5] - cogs[i])
+
 

@@ -16,6 +16,8 @@ from PyQt5.QtGui import QImage, QPixmap, QIntValidator
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5 import uic
 
+from collections import deque
+
 import cv2
 from epc_lib import epc_math
 from imgProc import imgProcScale
@@ -30,6 +32,8 @@ path = r'D:\HTW\Projektarbeit\300u_int_time_dcs_forward_90Deg.h5'
 
 mod_frequ = 20
 exposure = 250
+
+img_buffer_length = 10
 
 class Thread(QThread):
     """
@@ -55,6 +59,9 @@ class Thread(QThread):
     _exposure = 1
     _update_cam = False
 
+    _img_buffer = deque()
+    _img_count = 0
+
     #TODO for testing purposes only
     with h5py.File(path, 'r') as f:
         # List all groups
@@ -78,6 +85,41 @@ class Thread(QThread):
         distance.append(tmp1)
         phase.append(tmp2)
         amplitude.append(epc_math.calc_amplitude(image))
+
+    def _get_direction(self, image):
+        """
+        Calculate the direction of the moving object in the given image.
+
+        Parameters
+        ----------
+        image : numpy, UINT8
+            The current image.
+
+        Returns
+        -------
+        direction : int
+            Direction indicator: left      -> -1,
+                                 right     -> +1.
+                                 undefined -> 0
+
+        """
+        direction = 0
+        # get the 5th last image and get the center of gravity
+        img_last = self._img_buffer.popleft()
+        cog = imgProcScale.calc_image_cog(img_last, True)
+
+        # calculate cog of new image and calculate difference
+        cog -= imgProcScale.calc_image_cog(image, True)
+        
+        if cog[0] < 0:
+            direction = -1
+        elif cog[0] > 0:
+            direction = 1
+
+        # append the current image to the image buffer
+        self._img_buffer.append(image)
+
+        return direction
 
     def stop(self):
         """
@@ -111,6 +153,8 @@ class Thread(QThread):
         # TODO for testing only
         pool = cycle(self.amplitude)
 
+        img_memorize = True
+
         # pdb.set_trace()
         while self.running:
             #TODO image capture
@@ -126,8 +170,6 @@ class Thread(QThread):
                                                                self.gray,
                                                                self._exposure)
 
-                print(self._exposure, quality, noise)
-
                 # normalize gray image and convert to QImage and scale
                 cv2.normalize(img, img_view, 0, 255, cv2.NORM_MINMAX)
                 img_view = img_view.astype('uint8')
@@ -137,8 +179,18 @@ class Thread(QThread):
                 p = convertToQtFormat.scaled(4*width, 4*height,
                                              Qt.QtCore.Qt.KeepAspectRatio)
 
-                # request an update of the image
+                # request an update of the image in the viewer
                 self.change_pixmap.emit(p)
+
+                # memorize some images for direction estimation
+                if img_memorize:
+                    self._img_buffer.append(img_view)
+                    if len(self._img_buffer) == img_buffer_length:
+                        img_memorize = False
+
+                # get the direction of the movement
+                if not img_memorize:
+                    direction = self._get_direction(img_view)
 
             # check if the exposure settings need to be updated
 

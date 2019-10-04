@@ -54,6 +54,7 @@ class Thread(QThread):
     change_pixmap = pyqtSignal(QImage)          # indicate redraw of image
     update_config = pyqtSignal(str, bool)       # request change of exposure
     update_gui = pyqtSignal(int)                # return changed exposure
+    change_direction = pyqtSignal(int)          # indicate a change direction
 
     _auto = False
     _exposure = 1
@@ -98,21 +99,21 @@ class Thread(QThread):
         Returns
         -------
         direction : int
-            Direction indicator: left      -> -1,
+            Direction indicator: left      -> 0,
                                  right     -> +1.
-                                 undefined -> 0
+                                 undefined -> -1
 
         """
-        direction = 0
+        direction = -1
         # get the 5th last image and get the center of gravity
         img_last = self._img_buffer.popleft()
         cog = imgProcScale.calc_image_cog(img_last, True)
 
         # calculate cog of new image and calculate difference
         cog -= imgProcScale.calc_image_cog(image, True)
-        
+
         if cog[0] < 0:
-            direction = -1
+            direction = 0
         elif cog[0] > 0:
             direction = 1
 
@@ -191,6 +192,7 @@ class Thread(QThread):
                 # get the direction of the movement
                 if not img_memorize:
                     direction = self._get_direction(img_view)
+                    self.change_direction.emit(direction)
 
             # check if the exposure settings need to be updated
 
@@ -268,10 +270,37 @@ class App(QMainWindow):
         self.th.update_gui.connect(self._update_exposure_gui)
         self.exposure_LineEdit.editingFinished.connect(self._change_exposure)
         self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
-        self.th.change_pixmap.connect(self.set_image)
+        self.th.change_pixmap.connect(self._set_image)
+        self.th.change_direction.connect(self._show_direction)
+
+        # hide the line widgets
+        self.line_right.setVisible(False)
+        self.line_left.setVisible(False)
+
+    @pyqtSlot(int)
+    def _show_direction(self, direction):
+        """
+        Slot that changes the direction indicators.
+
+        Parameters
+        ----------
+        direction : int
+            The direction.
+
+        Returns
+        -------
+        None.
+
+        """
+        if direction != -1:
+            self.line_right.setVisible(bool(direction))
+            self.line_left.setVisible(not bool(direction))
+        else:
+            self.line_right.setVisible(False)
+            self.line_left.setVisible(False)
 
     @pyqtSlot(QImage)
-    def set_image(self, image):
+    def _set_image(self, image):
         """Slot that changes the shown image by setting the pixmap.
 
         Parameters

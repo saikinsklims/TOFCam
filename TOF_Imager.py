@@ -11,8 +11,8 @@ Main application script for the ToF Imager
 import os, sys
 import numpy as np
 import PyQt5 as Qt
-from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QCoreApplication
-from PyQt5.QtGui import QImage, QPixmap, QIntValidator
+from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QCoreApplication, QSize
+from PyQt5.QtGui import QImage, QPixmap, QIntValidator, QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5 import uic
 
@@ -313,6 +313,7 @@ class App(QMainWindow):
         # connect the widgets to the slots
         self.quit_Button.clicked.connect(self._quit_app)
         self.capture_live_Button.clicked.connect(self._start_live)
+        self.stop_live_Button.clicked.connect(self._stop_live)
         self.th.update_gui.connect(self._update_exposure_gui)
         self.exposure_LineEdit.editingFinished.connect(self._change_exposure)
         self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
@@ -326,6 +327,13 @@ class App(QMainWindow):
 
         # set the initial height info
         self.height_label.setText('0 m')
+
+        self.capture_live_Button.setIcon(QIcon("start.png"))
+        self.capture_live_Button.setIconSize(QSize(50, 50))
+
+        self.stop_live_Button.setIcon(QIcon("stop.png"))
+        self.stop_live_Button.setIconSize(QSize(50, 50))
+        self.stop_live_Button.setEnabled(False)
 
     @pyqtSlot(float)
     def _show_height(self, height):
@@ -423,11 +431,8 @@ class App(QMainWindow):
         None.
 
         """
-        self.capture_live_Button.setText("Stop Live View")
-
-        # reconnect the button to a different action
-        self.capture_live_Button.clicked.disconnect(self._start_live)
-        self.capture_live_Button.clicked.connect(self._stop_live)
+        self.capture_live_Button.setEnabled(False)
+        self.stop_live_Button.setEnabled(True)
 
         # start the capture
         self.th.start()
@@ -441,11 +446,8 @@ class App(QMainWindow):
         None.
 
         """
-        self.capture_live_Button.setText("Start Live View")
-
-        # reconnect the button to a different action
-        self.capture_live_Button.clicked.disconnect(self._stop_live)
-        self.capture_live_Button.clicked.connect(self._start_live)
+        self.capture_live_Button.setEnabled(True)
+        self.stop_live_Button.setEnabled(False)
 
         # stop capture
         self.th.stop()

@@ -59,9 +59,10 @@ class Thread(QThread):
     _auto = False
     _exposure = 1
     _update_cam = False
+    _threshold = 0.2                            # objects taller than 0.2m only
 
+    # image buffer for direction estimation
     _img_buffer = deque()
-    _img_count = 0
 
     #TODO for testing purposes only
     with h5py.File(path, 'r') as f:
@@ -78,23 +79,16 @@ class Thread(QThread):
     d_offset = np.zeros((height, width))
     gray = np.random.rand(height, width) * 30
 
-    distance = []
-    phase = []
-    amplitude = []
-    for image in data:
-        tmp1, tmp2 = epc_math.calc_dist_phase(image, mod_frequ, d_offset)
-        distance.append(tmp1)
-        phase.append(tmp2)
-        amplitude.append(epc_math.calc_amplitude(image))
-
-    def _get_direction(self, image):
+    def _get_direction(self, image, background):
         """
         Calculate the direction of the moving object in the given image.
 
         Parameters
         ----------
-        image : numpy, UINT8
+        image : numpy array
             The current image.
+        background: numpy array
+            The background.
 
         Returns
         -------
@@ -107,14 +101,16 @@ class Thread(QThread):
         direction = -1
         # get the 5th last image and get the center of gravity
         img_last = self._img_buffer.popleft()
-        cog = imgProcScale.calc_image_cog(img_last, True)
+        cog = imgProcScale.calc_image_cog(img_last, background,
+                                          False, self._threshold)
 
         # calculate cog of new image and calculate difference
-        cog -= imgProcScale.calc_image_cog(image, True)
+        cog -= imgProcScale.calc_image_cog(image, background,
+                                           False, self._threshold)
 
-        if cog[0] < 0:
+        if cog[0] > 0:
             direction = 0
-        elif cog[0] > 0:
+        elif cog[0] < 0:
             direction = 1
 
         # append the current image to the image buffer
@@ -151,28 +147,45 @@ class Thread(QThread):
         # connect the slots
         self.update_config.connect(self._update_exposure)
 
-        # TODO for testing only
-        pool = cycle(self.amplitude)
+        # TODO for testing only # FIXME replace with actual image capture
+        pool = cycle(self.data)
 
-        img_memorize = True
+        # fill the dist image buffer
+        for idx in range(img_buffer_length):
+            img = next(pool)
+            dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+            self._img_buffer.append(dist)
 
-        # pdb.set_trace()
+        # put a dist image in the average buffer
+        img_sum = dist.astype('float64')
+        img_count = 1
+
         while self.running:
             #TODO image capture
             time.sleep(0.2)
             img = next(pool)
 
             if img is not None:
-                img_view = img.copy()
-                img_view = self._exposure * img_view        # FIXME
+                img_count += 1
+
+                # calculate distance and phase
+                dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+                ampl = epc_math.calc_amplitude(img)
+
+                # put the image into the average
+                img_sum += dist
+                img_avg = np.round(img_sum / img_count)
+
+                # img_view = self._exposure * img_view        # FIXME
 
                 # get some quality measures
-                quality, noise = epc_math.check_signal_quality(img_view,
+                quality, noise = epc_math.check_signal_quality(ampl,
                                                                self.gray,
                                                                self._exposure)
 
                 # normalize gray image and convert to QImage and scale
-                cv2.normalize(img, img_view, 0, 255, cv2.NORM_MINMAX)
+                img_view = dist.copy()
+                cv2.normalize(dist, img_view, 0, 255, cv2.NORM_MINMAX)
                 img_view = img_view.astype('uint8')
                 height, width = img_view.shape
                 convertToQtFormat = QImage(img_view, width, height,
@@ -183,16 +196,8 @@ class Thread(QThread):
                 # request an update of the image in the viewer
                 self.change_pixmap.emit(p)
 
-                # memorize some images for direction estimation
-                if img_memorize:
-                    self._img_buffer.append(img_view)
-                    if len(self._img_buffer) == img_buffer_length:
-                        img_memorize = False
-
-                # get the direction of the movement
-                if not img_memorize:
-                    direction = self._get_direction(img_view)
-                    self.change_direction.emit(direction)
+                direction = self._get_direction(dist, img_avg)
+                self.change_direction.emit(direction)
 
             # check if the exposure settings need to be updated
 

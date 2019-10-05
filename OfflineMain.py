@@ -45,6 +45,9 @@ for image in data:
 
 quality, noise = epc_math.check_signal_quality(amplitude[0], gray, exposure)
 
+background = np.ones((60, 200))
+background *= 5.6
+
 print(quality, noise)
 
 # convert the images to height information
@@ -52,8 +55,8 @@ distance2 = [-x + x.max() for x in distance]
 
 # show the shifting center of gravity in the image stream
 cogs = []
-for image in distance2:
-    cogs.append(imgProcScale.calc_image_cog(image, True))
+for image in distance:
+    cogs.append(imgProcScale.calc_image_cog(image, background, False, 0.2))
 
 cogs = np.array(cogs)
 

@@ -55,6 +55,7 @@ class Thread(QThread):
     update_config = pyqtSignal(str, bool)       # request change of exposure
     update_gui = pyqtSignal(int)                # return changed exposure
     change_direction = pyqtSignal(int)          # indicate a change direction
+    change_height = pyqtSignal(float)           # indicate a new height
 
     _auto = False
     _exposure = 1
@@ -78,6 +79,43 @@ class Thread(QThread):
     # create an empty offset-images and a random gray image
     d_offset = np.zeros((height, width))
     gray = np.random.rand(height, width) * 30
+
+    def _get_height(self, image, background):
+        """
+        Calculate the height of the object in the distance image.
+
+        Parameters
+        ----------
+        image : numpy array
+            The distance image.
+        background : numpy array
+            The background image.
+
+        Returns
+        -------
+        height : float
+            The calculated height of the object.
+
+        """
+        height = 0
+
+        base_height = np.mean(background)
+
+        # thresholding first
+
+        image[image > background - self._threshold] = base_height
+
+        # shift and flip
+        image = -(image - base_height)
+
+        # some gaussian blurring
+        img_blur = cv2.GaussianBlur(image, (5, 5), 2)
+
+        # get the height
+        height = np.max(img_blur)
+        height = round(height, 2)
+
+        return height
 
     def _get_direction(self, image, background):
         """
@@ -199,6 +237,9 @@ class Thread(QThread):
                 direction = self._get_direction(dist, img_avg)
                 self.change_direction.emit(direction)
 
+                height = self._get_height(dist, img_avg)
+                self.change_height.emit(height)
+
             # check if the exposure settings need to be updated
 
             # if auto exposure
@@ -277,10 +318,31 @@ class App(QMainWindow):
         self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
         self.th.change_pixmap.connect(self._set_image)
         self.th.change_direction.connect(self._show_direction)
+        self.th.change_height.connect(self._show_height)
 
         # hide the line widgets
         self.line_right.setVisible(False)
         self.line_left.setVisible(False)
+
+        # set the initial height info
+        self.height_label.setText('0 m')
+
+    @pyqtSlot(float)
+    def _show_height(self, height):
+        """
+        Display the new height.
+
+        Parameters
+        ----------
+        height : float
+            The new height.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.height_label.setText('{0:.2f} m'.format(height))
 
     @pyqtSlot(int)
     def _show_direction(self, direction):

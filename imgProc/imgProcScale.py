@@ -99,7 +99,7 @@ def scale_image_gray(img):
 
     return dimg
 
-def calc_image_cog(img, auto_thresh, threshold=None):
+def calc_image_cog(img, background, auto_thresh, threshold=None):
     """
     Calculate the image moments after background suppression.
 
@@ -107,6 +107,8 @@ def calc_image_cog(img, auto_thresh, threshold=None):
     ----------
     img : numpy array
         The distance image.
+    background: numpy array
+        the background image.    
     auto_thresh: bool
         Use auto background calculation.      
     threshold: float
@@ -114,7 +116,7 @@ def calc_image_cog(img, auto_thresh, threshold=None):
 
     Returns
     -------
-    moments : list
+    moments : numpy array
         The image moments.
 
     """
@@ -128,11 +130,11 @@ def calc_image_cog(img, auto_thresh, threshold=None):
         thresh = threshold
 
     # segmentation of image into foreground and background
-    img_bin = (img > thresh).astype(np.uint8)
+    img_bin = (img < background - thresh).astype(np.uint8)
 
     # get moments and calculated the center of gravity
     moments = cv2.moments(img_bin)
     cog_x = moments['m10'] / (moments['m00'] + 1e-5)  # avoid zero by a ~0
     cog_y = moments['m01'] / (moments['m00'] + 1e-5)
 
-    return (cog_x, cog_y)
+    return np.array([cog_x, cog_y])

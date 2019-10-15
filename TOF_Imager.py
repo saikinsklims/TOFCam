@@ -35,6 +35,7 @@ exposure = 250
 
 img_buffer_length = 10
 
+
 class Thread(QThread):
     """
     Separate QThread that captures the camera images and after conversion
@@ -55,7 +56,7 @@ class Thread(QThread):
     update_config = pyqtSignal(str, bool)       # request change of exposure
     update_gui = pyqtSignal(int)                # return changed exposure
     change_direction = pyqtSignal(int)          # indicate a change direction
-    change_height = pyqtSignal(float)           # indicate a new height
+    change_height = pyqtSignal(float, bool)     # indicate a new height
 
     _auto = False
     _exposure = 1
@@ -65,17 +66,17 @@ class Thread(QThread):
     # image buffer for direction estimation
     _img_buffer = deque()
 
-    #TODO for testing purposes only
+    # TODO for testing purposes only
     with h5py.File(path, 'r') as f:
         # List all groups
         a_group_key = list(f.keys())[0]
-    
+
         # Get the data
         data = list(f[a_group_key])
 
     # get height and width of images
     height, _, width = data[0].shape
-    
+
     # create an empty offset-images and a random gray image
     d_offset = np.zeros((height, width))
     gray = np.random.rand(height, width) * 30
@@ -95,6 +96,8 @@ class Thread(QThread):
         -------
         height : float
             The calculated height of the object.
+        correct_height: bool
+            Check if height is within the correct position
 
         """
         height = 0
@@ -102,7 +105,6 @@ class Thread(QThread):
         base_height = np.mean(background)
 
         # thresholding first
-
         image[image > background - self._threshold] = base_height
 
         # shift and flip
@@ -115,7 +117,15 @@ class Thread(QThread):
         height = np.max(img_blur)
         height = round(height, 2)
 
-        return height
+        # get x-position of height
+        tmp_pos = np.argmax(img_blur)
+        pos = np.unravel_index(tmp_pos, img_blur.shape)
+        pos = pos[0]
+        correct_height = False
+        if (300 < pos < 900):
+            correct_height = True
+
+        return height, correct_height
 
     def _get_direction(self, image, background):
         """
@@ -170,7 +180,6 @@ class Thread(QThread):
         # disconnect the slots
         self.update_config.disconnect()
 
-
     def run(self):
         """
         Called by Thread.start(); actually containing the work.
@@ -199,7 +208,7 @@ class Thread(QThread):
         img_count = 1
 
         while self.running:
-            #TODO image capture
+            # TODO image capture
             time.sleep(0.2)
             img = next(pool)
 
@@ -237,8 +246,8 @@ class Thread(QThread):
                 direction = self._get_direction(dist, img_avg)
                 self.change_direction.emit(direction)
 
-                height = self._get_height(dist, img_avg)
-                self.change_height.emit(height)
+                height, pos_correct = self._get_height(dist, img_avg)
+                self.change_height.emit(height, pos_correct)
 
             # check if the exposure settings need to be updated
 
@@ -253,7 +262,7 @@ class Thread(QThread):
                 self._update_cam = True
 
             if self._update_cam:
-                #TODO change camera settings
+                # TODO change camera settings
                 self.update_gui.emit(self._exposure)
                 self._update_cam = False
 
@@ -327,6 +336,7 @@ class App(QMainWindow):
 
         # set the initial height info
         self.height_label.setText('0 m')
+        self.height_label.setStyleSheet("QLabel { background-color : red; color : black; }")
 
         self.capture_live_Button.setIcon(QIcon("start.png"))
         self.capture_live_Button.setIconSize(QSize(50, 50))
@@ -335,8 +345,8 @@ class App(QMainWindow):
         self.stop_live_Button.setIconSize(QSize(50, 50))
         self.stop_live_Button.setEnabled(False)
 
-    @pyqtSlot(float)
-    def _show_height(self, height):
+    @pyqtSlot(float, bool)
+    def _show_height(self, height, correct_height):
         """
         Display the new height.
 
@@ -344,6 +354,8 @@ class App(QMainWindow):
         ----------
         height : float
             The new height.
+        correct_height: bool
+            Indicator if height position is correct.
 
         Returns
         -------
@@ -351,6 +363,12 @@ class App(QMainWindow):
 
         """
         self.height_label.setText('{0:.2f} m'.format(height))
+
+        if correct_height:
+            self.height_label.setStyleSheet("QLabel { background-color : green; color : white; }")
+        else:
+            self.height_label.setStyleSheet("QLabel { background-color : red; color : black; }")
+
 
     @pyqtSlot(int)
     def _show_direction(self, direction):
@@ -406,7 +424,8 @@ class App(QMainWindow):
     @pyqtSlot(int)
     def _update_exposure_gui(self, value):
         """
-        Is triggered when the capturing thread has changed the exposure settings.
+        Is triggered when the capturing thread has changed the exposure
+        settings.
 
         Parameters
         ----------
@@ -464,6 +483,7 @@ class App(QMainWindow):
         """
         self.close()
         QCoreApplication.quit()
+
 
 if __name__ == '__main__':
     if not os.path.exists('TOF_Imager.ui'):

@@ -57,6 +57,7 @@ class Thread(QThread):
     update_gui = pyqtSignal(int)                # return changed exposure
     change_direction = pyqtSignal(int)          # indicate a change direction
     change_height = pyqtSignal(float, bool)     # indicate a new height
+    new_person = pyqtSignal()                   # indicate a new person
 
     _auto = False
     _exposure = 1
@@ -66,6 +67,9 @@ class Thread(QThread):
     # image buffer for direction estimation
     _img_buffer = deque()
 
+    # buffer for the position of the person
+    _pos_buffer = None
+
     # TODO for testing purposes only
     with h5py.File(path, 'r') as f:
         # List all groups
@@ -74,6 +78,9 @@ class Thread(QThread):
         # Get the data
         data = list(f[a_group_key])
 
+    data = [x.transpose() for x in data]
+
+    # TODO check correct dimensions
     # get height and width of images
     height, _, width = data[0].shape
 
@@ -98,6 +105,8 @@ class Thread(QThread):
             The calculated height of the object.
         correct_height: bool
             Check if height is within the correct position
+        pos : numpy array
+            Position of the person
 
         """
         height = 0
@@ -120,12 +129,11 @@ class Thread(QThread):
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
         pos = np.unravel_index(tmp_pos, img_blur.shape)
-        pos = pos[0]
         correct_height = False
-        if (300 < pos < 900):
+        # TODO check correct position for correct height calculation
+        if (50 < pos[1] < 100):
             correct_height = True
-
-        return height, correct_height
+        return height, correct_height, pos
 
     def _get_direction(self, image, background):
         """
@@ -230,24 +238,38 @@ class Thread(QThread):
                                                                self.gray,
                                                                self._exposure)
 
+                height, pos_correct, pos = self._get_height(dist.copy(), img_avg)
+                self.change_height.emit(height, pos_correct)
+
+                direction = self._get_direction(dist.copy(), img_avg)
+                self.change_direction.emit(direction)
+
                 # normalize gray image and convert to QImage and scale
                 img_view = dist.copy()
                 cv2.normalize(dist, img_view, 0, 255, cv2.NORM_MINMAX)
                 img_view = img_view.astype('uint8')
                 height, width = img_view.shape
+                # draw a circle aroud person, but only if taller than 0.5m
+                if height > 0.5:
+                    img_view = cv2.circle(img_view, (pos[1], pos[0]), 10, 128)
+                # TODO check correct position orientation
                 convertToQtFormat = QImage(img_view, width, height,
                                            QImage.Format_Grayscale8)
                 p = convertToQtFormat.scaled(4*width, 4*height,
-                                             Qt.QtCore.Qt.KeepAspectRatio)
+                                             Qt.QtCore.Qt.IgnoreAspectRatio)
 
                 # request an update of the image in the viewer
                 self.change_pixmap.emit(p)
 
-                direction = self._get_direction(dist, img_avg)
-                self.change_direction.emit(direction)
+                # it is a new person, when the person is suddenly at a
+                # different place
+                if self._pos_buffer is not None & height > 0.5:
+                    tmp = self._pos_buffer
+                    diff_x = abs(tmp[0] - pos[0])
+                    if diff_x > 30:
+                        self.new_person.emit()
 
-                height, pos_correct = self._get_height(dist, img_avg)
-                self.change_height.emit(height, pos_correct)
+                self._pos_buffer = pos
 
             # check if the exposure settings need to be updated
 
@@ -329,10 +351,11 @@ class App(QMainWindow):
         self.th.change_pixmap.connect(self._set_image)
         self.th.change_direction.connect(self._show_direction)
         self.th.change_height.connect(self._show_height)
+        self.th.new_person.connect(self._increment_Counter)
 
         # hide the line widgets
-        self.line_right.setVisible(False)
-        self.line_left.setVisible(False)
+        self.line_up.setVisible(False)
+        self.line_down.setVisible(False)
 
         # set the initial height info
         self.height_label.setText('0 m')
@@ -344,6 +367,8 @@ class App(QMainWindow):
         self.stop_live_Button.setIcon(QIcon("stop.png"))
         self.stop_live_Button.setIconSize(QSize(50, 50))
         self.stop_live_Button.setEnabled(False)
+
+        self.counter = 0
 
     @pyqtSlot(float, bool)
     def _show_height(self, height, correct_height):
@@ -369,6 +394,18 @@ class App(QMainWindow):
         else:
             self.height_label.setStyleSheet("QLabel { background-color : red; color : black; }")
 
+    @pyqtSlot()
+    def _increment_Counter(self):
+        """
+        Increment the person counter and show the new count.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.counter += 1
+        self.count_label.setText('{}'.format(self.counter))
 
     @pyqtSlot(int)
     def _show_direction(self, direction):
@@ -386,11 +423,11 @@ class App(QMainWindow):
 
         """
         if direction != -1:
-            self.line_right.setVisible(bool(direction))
-            self.line_left.setVisible(not bool(direction))
+            self.line_up.setVisible(bool(direction))
+            self.line_down.setVisible(not bool(direction))
         else:
-            self.line_right.setVisible(False)
-            self.line_left.setVisible(False)
+            self.line_up.setVisible(False)
+            self.line_down.setVisible(False)
 
     @pyqtSlot(QImage)
     def _set_image(self, image):

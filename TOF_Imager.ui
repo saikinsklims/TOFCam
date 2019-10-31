@@ -108,7 +108,7 @@
     <widget class="QPushButton" name="capture_live_Button">
      <property name="geometry">
       <rect>
-       <x>20</x>
+       <x>10</x>
        <y>0</y>
        <width>55</width>
        <height>55</height>
@@ -149,10 +149,10 @@
     <widget class="QPushButton" name="quit_Button">
      <property name="geometry">
       <rect>
-       <x>20</x>
-       <y>250</y>
-       <width>201</width>
-       <height>51</height>
+       <x>190</x>
+       <y>0</y>
+       <width>55</width>
+       <height>55</height>
       </rect>
      </property>
      <property name="font">
@@ -234,7 +234,7 @@
     <widget class="QPushButton" name="stop_live_Button">
      <property name="geometry">
       <rect>
-       <x>140</x>
+       <x>100</x>
        <y>0</y>
        <width>55</width>
        <height>55</height>
@@ -293,6 +293,48 @@
       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
      </property>
     </widget>
+    <widget class="QLabel" name="count_label">
+     <property name="geometry">
+      <rect>
+       <x>140</x>
+       <y>230</y>
+       <width>81</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>16</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>0</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="count_label_2">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>230</y>
+       <width>101</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>16</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Count</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
    </widget>
    <widget class="QLabel" name="label">
     <property name="geometry">
@@ -317,13 +359,13 @@
      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
     </property>
    </widget>
-   <widget class="Line" name="line_right">
+   <widget class="Line" name="line_down">
     <property name="geometry">
      <rect>
-      <x>630</x>
-      <y>50</y>
-      <width>20</width>
-      <height>240</height>
+      <x>10</x>
+      <y>280</y>
+      <width>641</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -339,16 +381,16 @@
      <number>0</number>
     </property>
     <property name="orientation">
-     <enum>Qt::Vertical</enum>
+     <enum>Qt::Horizontal</enum>
     </property>
    </widget>
-   <widget class="Line" name="line_left">
+   <widget class="Line" name="line_up">
     <property name="geometry">
      <rect>
       <x>10</x>
       <y>50</y>
-      <width>20</width>
-      <height>240</height>
+      <width>641</width>
+      <height>21</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -364,7 +406,7 @@
      <number>0</number>
     </property>
     <property name="orientation">
-     <enum>Qt::Vertical</enum>
+     <enum>Qt::Horizontal</enum>
     </property>
    </widget>
   </widget>

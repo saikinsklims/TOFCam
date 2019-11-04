@@ -19,8 +19,10 @@ from PyQt5 import uic
 from collections import deque
 
 import cv2
+from epc_lib import epc_server, epc_image
 from epc_lib import epc_math
 from imgProc import imgProcScale
+from imager import imager
 
 
 # TODO for testing purposes only
@@ -30,10 +32,13 @@ import time
 from itertools import cycle
 path = r'D:\HTW\Projektarbeit\300u_int_time_dcs_forward_90Deg.h5'
 
-mod_frequ = 20
+mod_frequ = 10
 exposure = 250
 
 img_buffer_length = 10
+
+amplthreshMax = 65000
+amplthreshMin = 15
 
 
 class Thread(QThread):
@@ -51,6 +56,18 @@ class Thread(QThread):
     cam = None
     running = False
 
+    try:
+        server = epc_server('192.168.1.80') # Ethernet connection
+        image_epcDev = epc_image(server)
+        # init whole imager
+        imager.imagerInit(server, image_epcDev)
+        cam = True
+    except:
+        print("[INFO]: Cant connect to server")
+        cam = False
+
+    img = image_epcDev.getDCSs()
+
     # signals
     change_pixmap = pyqtSignal(QImage)          # indicate redraw of image
     update_config = pyqtSignal(str, bool)       # request change of exposure
@@ -62,27 +79,27 @@ class Thread(QThread):
     _auto = False
     _exposure = 1
     _update_cam = False
-    _threshold = 0.2                            # objects taller than 0.2m only
+    _threshold = 200                            # objects taller than 0.2m only
 
     # image buffer for direction estimation
     _img_buffer = deque()
 
     # buffer for the position of the person
-    _pos_buffer = None
+    _pos_buffer = []
 
-    # TODO for testing purposes only
-    with h5py.File(path, 'r') as f:
-        # List all groups
-        a_group_key = list(f.keys())[0]
+    # # TODO for testing purposes only
+    # with h5py.File(path, 'r') as f:
+    #     # List all groups
+    #     a_group_key = list(f.keys())[0]
 
-        # Get the data
-        data = list(f[a_group_key])
+    #     # Get the data
+    #     data = list(f[a_group_key])
 
-    data = [x.transpose() for x in data]
+    # data = [x.transpose() for x in data]
 
     # TODO check correct dimensions
     # get height and width of images
-    height, _, width = data[0].shape
+    height, width = 60, 160
 
     # create an empty offset-images and a random gray image
     d_offset = np.zeros((height, width))
@@ -203,29 +220,34 @@ class Thread(QThread):
         self.update_config.connect(self._update_exposure)
 
         # TODO for testing only # FIXME replace with actual image capture
-        pool = cycle(self.data)
+        # pool = cycle(self.data)
 
         # fill the dist image buffer
         for idx in range(img_buffer_length):
-            img = next(pool)
+            img = self.image_epcDev.getDCSs()
             dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+            dist = cv2.medianBlur(dist, 7)
+            ampl = epc_math.calc_amplitude(img)
             self._img_buffer.append(dist)
 
         # put a dist image in the average buffer
         img_sum = dist.astype('float64')
         img_count = 1
 
-        while self.running:
+        while self.running and self.cam:
             # TODO image capture
-            time.sleep(0.2)
-            img = next(pool)
+            # time.sleep(0.2)
+            # img = next(pool)
+            img = self.image_epcDev.getDCSs()
 
             if img is not None:
                 img_count += 1
 
                 # calculate distance and phase
                 dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
-                ampl = epc_math.calc_amplitude(img)
+                # ampl = epc_math.calc_amplitude(img)
+
+                dist = cv2.medianBlur(dist, 7)
 
                 # put the image into the average
                 img_sum += dist
@@ -234,9 +256,9 @@ class Thread(QThread):
                 # img_view = self._exposure * img_view        # FIXME
 
                 # get some quality measures
-                quality, noise = epc_math.check_signal_quality(ampl,
-                                                               self.gray,
-                                                               self._exposure)
+                # quality, noise = epc_math.check_signal_quality(ampl,
+                #                                                self.gray,
+                #                                                self._exposure)
 
                 height, pos_correct, pos = self._get_height(dist.copy(), img_avg)
                 self.change_height.emit(height, pos_correct)
@@ -248,22 +270,21 @@ class Thread(QThread):
                 img_view = dist.copy()
                 cv2.normalize(dist, img_view, 0, 255, cv2.NORM_MINMAX)
                 img_view = img_view.astype('uint8')
-                height, width = img_view.shape
+                img_height, img_width = img_view.shape
                 # draw a circle aroud person, but only if taller than 0.5m
                 if height > 0.5:
                     img_view = cv2.circle(img_view, (pos[1], pos[0]), 10, 128)
                 # TODO check correct position orientation
-                convertToQtFormat = QImage(img_view, width, height,
+                convertToQtFormat = QImage(img_view, img_width, img_height,
                                            QImage.Format_Grayscale8)
-                p = convertToQtFormat.scaled(4*width, 4*height,
+                p = convertToQtFormat.scaled(4*img_width, 4*img_height,
                                              Qt.QtCore.Qt.IgnoreAspectRatio)
 
                 # request an update of the image in the viewer
                 self.change_pixmap.emit(p)
-
                 # it is a new person, when the person is suddenly at a
                 # different place
-                if self._pos_buffer is not None & height > 0.5:
+                if self._pos_buffer != [] and height > 100:
                     tmp = self._pos_buffer
                     diff_x = abs(tmp[0] - pos[0])
                     if diff_x > 30:
@@ -275,18 +296,18 @@ class Thread(QThread):
 
             # if auto exposure
             # TODO incorperate noise estimate and control that as well
-            if self._auto:
-                # increase exposure until pixel intensity is good
-                if quality < 0:
-                    self._exposure += 1
-                elif quality > 0:
-                    self._exposure -= 1
-                self._update_cam = True
+            # if self._auto:
+            #     # increase exposure until pixel intensity is good
+            #     if quality < 0:
+            #         self._exposure += 1
+            #     elif quality > 0:
+            #         self._exposure -= 1
+            #     self._update_cam = True
 
-            if self._update_cam:
-                # TODO change camera settings
-                self.update_gui.emit(self._exposure)
-                self._update_cam = False
+            # if self._update_cam:
+            #     # TODO change camera settings
+            #     self.update_gui.emit(self._exposure)
+            #     self._update_cam = False
 
     @pyqtSlot(str, bool)
     def _update_exposure(self, value, auto):

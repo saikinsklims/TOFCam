@@ -24,7 +24,7 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
     led_mod_freq : int
         The LED modulation frequency in MHz.
     d_offset : numpy array, shape (height, width)
-        A numpy array containing the distance offset from the gray-image. 
+        A numpy array containing the distance offset from the gray-image.
         Needs same shape as the DCSs
 
     Returns
@@ -36,8 +36,8 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
 
     """
 
-    phase = np.arctan2((dcs[:, 3, :] - dcs[:, 1, :]),
-                       (dcs[:, 2, :] - dcs[:, 0, :]))
+    phase = np.arctan2((dcs[:, :, 3] - dcs[:, :, 1]),
+                       (dcs[:, :, 2] - dcs[:, :, 0]))
     phase += np.pi
 
     dist = d_unamb[led_mod_freq] / 2 / np.pi * phase + d_offset
@@ -46,7 +46,7 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
     dist[dist > d_unamb[led_mod_freq]] -= d_unamb[led_mod_freq]
     dist[dist < 0] += d_unamb[led_mod_freq]
 
-    return dist, phase
+    return dist.transpose()*1000, phase.transpose()
 
 def calc_amplitude(dcs):
     """
@@ -64,10 +64,10 @@ def calc_amplitude(dcs):
 
     """
 
-    ampl = 0.5 * np.sqrt((dcs[:, 3, :] - dcs[:, 1, :])**2 +
-                         (dcs[:, 2, :] - dcs[:, 0, :])**2)
+    ampl = 0.5 * np.sqrt((dcs[:, :, 3] - dcs[:, :, 1])**2 +
+                         (dcs[:, :, 2] - dcs[:, :, 0])**2)
 
-    return ampl
+    return ampl.transpose()
 
 def check_signal_quality(ampl, gray, exposure):
     """
@@ -92,7 +92,7 @@ def check_signal_quality(ampl, gray, exposure):
     noise : int
         Description of the SNR.
         -1: high noise
-        0: good signal        
+        0: good signal
     """
     quality = 0
     noise = 0

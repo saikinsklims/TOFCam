@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import pickle
-import time
+import cv2
 
 # load matrices
 with open(r'mat_a.pkl', 'rb') as file:
@@ -23,21 +23,46 @@ with open(r'mat_b.pkl', 'rb') as file:
 plot = False
 
 if plot:
+    mat_in = a
     fig, ax = plt.subplots()
-    im = ax.imshow(a)
-    # initialization function: plot the background of each frame
+    im = ax.imshow(mat_in)
+
     def init():
-        im.set_data(a)
+        """
+        Initialization function for animation
+
+        Returns
+        -------
+        list
+            iterable of plot data.
+
+        """
+        im.set_data(mat_in)
         return [im]
 
-    # animation function.  This is called sequentially
     def animate(i):
-        a = im.get_array()
-        a = np.roll(a, 1, axis=0)
-        im.set_array(a)
+        """
+        Main animation function.  This is called sequentially
+
+        Parameters
+        ----------
+        i : int
+            Just a number.
+
+        Returns
+        -------
+        list
+            iterable of plot data.
+
+        """
+        tmp = im.get_array()
+        tmp = np.roll(tmp, 1, axis=0)
+        im.set_array(tmp)
         return [im]
 
     anim = animation.FuncAnimation(fig, animate, init_func=init,
                                    frames=200, interval=20, blit=True)
 
     plt.show()
+
+# threshold image

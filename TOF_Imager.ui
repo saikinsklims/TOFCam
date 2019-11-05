@@ -254,9 +254,9 @@
     <widget class="QLabel" name="height_label">
      <property name="geometry">
       <rect>
-       <x>110</x>
+       <x>90</x>
        <y>180</y>
-       <width>111</width>
+       <width>131</width>
        <height>51</height>
       </rect>
      </property>
@@ -296,9 +296,9 @@
     <widget class="QLabel" name="count_label">
      <property name="geometry">
       <rect>
-       <x>110</x>
+       <x>90</x>
        <y>230</y>
-       <width>111</width>
+       <width>131</width>
        <height>51</height>
       </rect>
      </property>

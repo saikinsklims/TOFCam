@@ -27,13 +27,15 @@ from imager import imager
 
 # TODO for testing purposes only
 import pdb
-import h5py
+import pickle
 import time
 from itertools import cycle
-path = r'D:\HTW\Projektarbeit\300u_int_time_dcs_forward_90Deg.h5'
+path1 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\distImageWithMotion.p'
+path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\ampImageWithMotion.p'
 
 mod_frequ = 10
-exposure = 250
+exposure = 3500
+offset = -2200
 
 img_buffer_length = 10
 
@@ -56,17 +58,17 @@ class Thread(QThread):
     cam = None
     running = False
 
-    try:
-        server = epc_server('192.168.1.80') # Ethernet connection
-        image_epcDev = epc_image(server)
-        # init whole imager
-        imager.imagerInit(server, image_epcDev)
-        cam = True
-    except:
-        print("[INFO]: Cant connect to server")
-        cam = False
+    # try:
+    #     server = epc_server('192.168.1.80') # Ethernet connection
+    #     image_epcDev = epc_image(server)
+    #     # init whole imager
+    #     imager.imagerInit(server, image_epcDev)
+    #     cam = True
+    # except:
+    #     print("[INFO]: Cant connect to server")
+    #     cam = False
 
-    img = image_epcDev.getDCSs()
+    # img = image_epcDev.getDCSs()
 
     # signals
     change_pixmap = pyqtSignal(QImage)          # indicate redraw of image
@@ -87,23 +89,53 @@ class Thread(QThread):
     # buffer for the position of the person
     _pos_buffer = []
 
-    # # TODO for testing purposes only
-    # with h5py.File(path, 'r') as f:
-    #     # List all groups
-    #     a_group_key = list(f.keys())[0]
+    # TODO for testing purposes only
+    with open(path1, 'rb') as file:
+        data_dist = pickle.load(file)
+        cam = True
+    with open(path2, 'rb') as file:
+        data_ampl = pickle.load(file)
 
-    #     # Get the data
-    #     data = list(f[a_group_key])
+    pool_data = cycle(data_dist)
+    pool_ampl = cycle(data_ampl)
 
-    # data = [x.transpose() for x in data]
-
-    # TODO check correct dimensions
     # get height and width of images
     height, width = 60, 160
 
     # create an empty offset-images and a random gray image
     d_offset = np.zeros((height, width))
     gray = np.random.rand(height, width) * 30
+
+    def _get_image(self):
+        """
+        Get the next image from the hardware.
+
+        Returns
+        -------
+        dist : numpy array
+            The distance image.
+        phase : numpy array
+            The phase image.
+        ampl : numpy array
+            The amplitude image.
+
+        """
+        # # capture image from hardware
+        # img = self.image_epcDev.getDCSs()
+        # # calculate the distance, phase and amplitude
+        # dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+        # ampl = epc_math.calc_amplitude(img)
+
+        dist = next(self.pool_data).astype('float32') + offset
+        phase = dist.copy()
+
+        ampl = next(self.pool_ampl).astype('float32')
+
+        # do some noise suppresion
+        dist = cv2.medianBlur(dist, 7)
+
+        return dist, phase, ampl
+
 
     def _get_height(self, image, background):
         """
@@ -147,7 +179,7 @@ class Thread(QThread):
         tmp_pos = np.argmax(img_blur)
         pos = np.unravel_index(tmp_pos, img_blur.shape)
         correct_height = False
-        # TODO check correct position for correct height calculation
+        # check correct position for correct height calculation
         if (50 < pos[1] < 100):
             correct_height = True
         return height, correct_height, pos
@@ -219,15 +251,9 @@ class Thread(QThread):
         # connect the slots
         self.update_config.connect(self._update_exposure)
 
-        # TODO for testing only # FIXME replace with actual image capture
-        # pool = cycle(self.data)
-
         # fill the dist image buffer
         for idx in range(img_buffer_length):
-            img = self.image_epcDev.getDCSs()
-            dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
-            dist = cv2.medianBlur(dist, 7)
-            ampl = epc_math.calc_amplitude(img)
+            dist, phase, ampl = self._get_image()
             self._img_buffer.append(dist)
 
         # put a dist image in the average buffer
@@ -235,19 +261,13 @@ class Thread(QThread):
         img_count = 1
 
         while self.running and self.cam:
+
+            dist, phase, ampl = self._get_image()
             # TODO image capture
-            # time.sleep(0.2)
-            # img = next(pool)
-            img = self.image_epcDev.getDCSs()
+            time.sleep(0.5)
 
-            if img is not None:
+            if dist is not None:
                 img_count += 1
-
-                # calculate distance and phase
-                dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
-                # ampl = epc_math.calc_amplitude(img)
-
-                dist = cv2.medianBlur(dist, 7)
 
                 # put the image into the average
                 img_sum += dist
@@ -256,19 +276,22 @@ class Thread(QThread):
                 # img_view = self._exposure * img_view        # FIXME
 
                 # get some quality measures
-                # quality, noise = epc_math.check_signal_quality(ampl,
-                #                                                self.gray,
-                #                                                self._exposure)
+                quality, noise = epc_math.check_signal_quality(ampl,
+                                                               self.gray,
+                                                               self._exposure)
 
-                height, pos_correct, pos = self._get_height(dist.copy(), img_avg)
+                # get the height and the height position
+                height, pos_correct, pos = self._get_height(dist.copy(),
+                                                            img_avg)
                 self.change_height.emit(height, pos_correct)
 
+                # get the direction
                 direction = self._get_direction(dist.copy(), img_avg)
                 self.change_direction.emit(direction)
 
                 # normalize gray image and convert to QImage and scale
                 img_view = dist.copy()
-                cv2.normalize(dist, img_view, 0, 255, cv2.NORM_MINMAX)
+                img_view = img_view / 2**12 * 255
                 img_view = img_view.astype('uint8')
                 img_height, img_width = img_view.shape
                 # draw a circle aroud person, but only if taller than 0.5m
@@ -408,7 +431,7 @@ class App(QMainWindow):
         None.
 
         """
-        self.height_label.setText('{0:.2f} m'.format(height))
+        self.height_label.setText('{0:.2f} mm'.format(height))
 
         if correct_height:
             self.height_label.setStyleSheet("QLabel { background-color : green; color : white; }")

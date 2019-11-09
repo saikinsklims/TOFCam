@@ -294,12 +294,14 @@ class Thread(QThread):
                 img_view = img_view / 2**12 * 255
                 img_view = img_view.astype('uint8')
                 img_height, img_width = img_view.shape
+                img_view = cv2.cvtColor(img_view, cv2.COLOR_GRAY2BGR)
                 # draw a circle aroud person, but only if taller than 0.5m
                 if height > 0.5:
-                    img_view = cv2.circle(img_view, (pos[1], pos[0]), 10, 128)
+                    img_view = cv2.circle(img_view, (pos[1], pos[0]),
+                                          10, (0, 0, 255))
                 # TODO check correct position orientation
                 convertToQtFormat = QImage(img_view, img_width, img_height,
-                                           QImage.Format_Grayscale8)
+                                           QImage.Format_RGB888)
                 p = convertToQtFormat.scaled(4*img_width, 4*img_height,
                                              Qt.QtCore.Qt.IgnoreAspectRatio)
 
@@ -312,6 +314,8 @@ class Thread(QThread):
                     diff_x = abs(tmp[0] - pos[0])
                     if diff_x > 30:
                         self.new_person.emit()
+                elif height < 50:
+                        self._pos_buffer = [0, 0]
 
                 self._pos_buffer = pos
 
@@ -327,10 +331,12 @@ class Thread(QThread):
             #         self._exposure -= 1
             #     self._update_cam = True
 
-            # if self._update_cam:
-            #     # TODO change camera settings
-            #     self.update_gui.emit(self._exposure)
-            #     self._update_cam = False
+            if self._update_cam:
+                # TODO change camera settings
+                self.server.sendCommand('setIntegrationTime2D {}'.format(self._exposure))	 # t_int in us
+                self.server.sendCommand('setIntegrationTime3D {}'.format(self._exposure))	  # t_int in us
+                self.update_gui.emit(self._exposure)
+                self._update_cam = False
 
     @pyqtSlot(str, bool)
     def _update_exposure(self, value, auto):
@@ -391,7 +397,7 @@ class App(QMainWindow):
         self.stop_live_Button.clicked.connect(self._stop_live)
         self.th.update_gui.connect(self._update_exposure_gui)
         self.exposure_LineEdit.editingFinished.connect(self._change_exposure)
-        self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
+        # self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
         self.th.change_pixmap.connect(self._set_image)
         self.th.change_direction.connect(self._show_direction)
         self.th.change_height.connect(self._show_height)
@@ -496,7 +502,8 @@ class App(QMainWindow):
 
         """
         value = self.exposure_LineEdit.text()
-        flag = bool(self.auto_exposure_CheckBox.isChecked())
+        # flag = bool(self.auto_exposure_CheckBox.isChecked())
+        flag = False
         self.exposure_LineEdit.setEnabled(not flag)
 
         # request a change of the configuration

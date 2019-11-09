@@ -187,7 +187,7 @@
       <string notr="true" extracomment="Numeric values only"/>
      </property>
      <property name="text">
-      <string>1</string>
+      <string>3500</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -211,24 +211,6 @@
      </property>
      <property name="text">
       <string>uS</string>
-     </property>
-    </widget>
-    <widget class="QCheckBox" name="auto_exposure_CheckBox">
-     <property name="geometry">
-      <rect>
-       <x>20</x>
-       <y>130</y>
-       <width>211</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>16</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>auto exposure</string>
      </property>
     </widget>
     <widget class="QPushButton" name="stop_live_Button">

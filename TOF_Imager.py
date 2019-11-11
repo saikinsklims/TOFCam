@@ -71,7 +71,7 @@ class Thread(QThread):
     # img = image_epcDev.getDCSs()
 
     # signals
-    change_pixmap = pyqtSignal(QImage)          # indicate redraw of image
+    change_pixmap = pyqtSignal(QImage, QImage)  # indicate redraw of image
     update_config = pyqtSignal(str, bool)       # request change of exposure
     update_gui = pyqtSignal(int)                # return changed exposure
     change_direction = pyqtSignal(int)          # indicate a change direction
@@ -134,8 +134,10 @@ class Thread(QThread):
         # do some noise suppresion
         dist = cv2.medianBlur(dist, 7)
 
-        return dist, phase, ampl
+        # TODO image capture
+        time.sleep(0.5)
 
+        return dist, phase, ampl
 
     def _get_height(self, image, background):
         """
@@ -263,8 +265,6 @@ class Thread(QThread):
         while self.running and self.cam:
 
             dist, phase, ampl = self._get_image()
-            # TODO image capture
-            time.sleep(0.5)
 
             if dist is not None:
                 img_count += 1
@@ -305,8 +305,16 @@ class Thread(QThread):
                 p = convertToQtFormat.scaled(4*img_width, 4*img_height,
                                              Qt.QtCore.Qt.IgnoreAspectRatio)
 
+                background = img_avg.copy()
+                background = background / background.max() * 255
+                background = background.astype('uint8')
+                convertToQtFormat = QImage(background, img_width, img_height,
+                                           QImage.Format_Grayscale8)
+                q = convertToQtFormat.scaled(4*img_width, 4*img_height,
+                                             Qt.QtCore.Qt.IgnoreAspectRatio)
+
                 # request an update of the image in the viewer
-                self.change_pixmap.emit(p)
+                self.change_pixmap.emit(p, q)
                 # it is a new person, when the person is suddenly at a
                 # different place
                 if self._pos_buffer != [] and height > 100:
@@ -315,7 +323,7 @@ class Thread(QThread):
                     if diff_x > 30:
                         self.new_person.emit()
                 elif height < 50:
-                        self._pos_buffer = [0, 0]
+                    self._pos_buffer = [0, 0]
 
                 self._pos_buffer = pos
 
@@ -479,17 +487,20 @@ class App(QMainWindow):
             self.line_up.setVisible(False)
             self.line_down.setVisible(False)
 
-    @pyqtSlot(QImage)
-    def _set_image(self, image):
+    @pyqtSlot(QImage, QImage)
+    def _set_image(self, image, background):
         """Slot that changes the shown image by setting the pixmap.
 
         Parameters
         ----------
         image : QImage
             The image.
+        background: QImage
+            The Background image.
 
         """
         self.image_View.setPixmap(QPixmap.fromImage(image))
+        self.background_View.setPixmap(QPixmap.fromImage(background))
 
     @pyqtSlot()
     def _change_exposure(self):

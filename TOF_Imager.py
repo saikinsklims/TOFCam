@@ -58,15 +58,15 @@ class Thread(QThread):
     cam = None
     running = False
 
-    # try:
-    #     server = epc_server('192.168.1.80') # Ethernet connection
-    #     image_epcDev = epc_image(server)
-    #     # init whole imager
-    #     imager.imagerInit(server, image_epcDev)
-    #     cam = True
-    # except:
-    #     print("[INFO]: Cant connect to server")
-    #     cam = False
+    try:
+        server = epc_server('192.168.1.80') # Ethernet connection
+        image_epcDev = epc_image(server)
+        # init whole imager
+        imager.imagerInit(server, image_epcDev)
+        cam = True
+    except:
+        print("[INFO]: Cant connect to server")
+        cam = False
 
     # img = image_epcDev.getDCSs()
 
@@ -90,14 +90,14 @@ class Thread(QThread):
     _pos_buffer = []
 
     # TODO for testing purposes only
-    with open(path1, 'rb') as file:
-        data_dist = pickle.load(file)
-        cam = True
-    with open(path2, 'rb') as file:
-        data_ampl = pickle.load(file)
+    # with open(path1, 'rb') as file:
+    #     data_dist = pickle.load(file)
+    #     cam = True
+    # with open(path2, 'rb') as file:
+    #     data_ampl = pickle.load(file)
 
-    pool_data = cycle(data_dist)
-    pool_ampl = cycle(data_ampl)
+    # pool_data = cycle(data_dist)
+    # pool_ampl = cycle(data_ampl)
 
     # get height and width of images
     height, width = 60, 160
@@ -121,21 +121,20 @@ class Thread(QThread):
 
         """
         # # capture image from hardware
-        # img = self.image_epcDev.getDCSs()
-        # # calculate the distance, phase and amplitude
-        # dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
-        # ampl = epc_math.calc_amplitude(img)
+        img = self.image_epcDev.getDCSs()
+        # calculate the distance, phase and amplitude
+        dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+        ampl = epc_math.calc_amplitude(img)
 
-        dist = next(self.pool_data).astype('float32') + offset
-        phase = dist.copy()
-
-        ampl = next(self.pool_ampl).astype('float32')
+        # TODO for testing
+        # dist = next(self.pool_data).astype('float32') + offset
+        # phase = dist.copy()
+        # ampl = next(self.pool_ampl).astype('float32')
+        # time.sleep(0.5)
 
         # do some noise suppresion
+        dist = dist.astype('float32')
         dist = cv2.medianBlur(dist, 7)
-
-        # TODO image capture
-        time.sleep(0.5)
 
         return dist, phase, ampl
 
@@ -171,11 +170,13 @@ class Thread(QThread):
         image = -(image - base_height)
 
         # some gaussian blurring
-        img_blur = cv2.GaussianBlur(image, (5, 5), 2)
+        img_blur = cv2.GaussianBlur(image, (15, 5), 7)
 
         # get the height
         height = np.max(img_blur)
         height = round(height, 2)
+
+        height = height * 0.9447 - 341
 
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
@@ -272,6 +273,9 @@ class Thread(QThread):
                 # put the image into the average
                 img_sum += dist
                 img_avg = np.round(img_sum / img_count)
+                if (img_count == 250):
+                    img_sum = img_avg
+                    img_count = 1
 
                 # img_view = self._exposure * img_view        # FIXME
 
@@ -296,7 +300,7 @@ class Thread(QThread):
                 img_height, img_width = img_view.shape
                 img_view = cv2.cvtColor(img_view, cv2.COLOR_GRAY2BGR)
                 # draw a circle aroud person, but only if taller than 0.5m
-                if height > 0.5:
+                if height > 200:
                     img_view = cv2.circle(img_view, (pos[1], pos[0]),
                                           10, (0, 0, 255))
                 # TODO check correct position orientation
@@ -316,16 +320,16 @@ class Thread(QThread):
                 # request an update of the image in the viewer
                 self.change_pixmap.emit(p, q)
                 # it is a new person, when the person is suddenly at a
-                # different place
-                if self._pos_buffer != [] and height > 100:
-                    tmp = self._pos_buffer
-                    diff_x = abs(tmp[0] - pos[0])
-                    if diff_x > 30:
-                        self.new_person.emit()
-                elif height < 50:
-                    self._pos_buffer = [0, 0]
-
+                # different place and taller than 1000
+                if self._pos_buffer == [0, 0] and height > 1000:
+                    # tmp = self._pos_buffer
+                    # diff_x = abs(tmp[0] - pos[0])
+                    # if diff_x > 30:
+                    self.new_person.emit()
+                elif height < 1000:
+                    pos = [0, 0]
                 self._pos_buffer = pos
+
 
             # check if the exposure settings need to be updated
 

@@ -36,6 +36,7 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
 
     """
 
+    dcs = dcs.astype(float)
     phase = np.arctan2((dcs[:, :, 3] - dcs[:, :, 1]),
                        (dcs[:, :, 2] - dcs[:, :, 0]))
     phase += np.pi

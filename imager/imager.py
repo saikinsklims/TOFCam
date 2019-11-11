@@ -46,8 +46,8 @@ def imagerInit(server, imgDev):
 		setModFreq = '10_12MHz'
 		server.sendCommand('setModulationFrequency '+str(modFreq[setModFreq]))
 		#set integration times
-		server.sendCommand('setIntegrationTime2D 3500')	 # t_int in us
-		server.sendCommand('setIntegrationTime3D 3500')	  # t_int in us
+		server.sendCommand('setIntegrationTime2D 1000')	 # t_int in us
+		server.sendCommand('setIntegrationTime3D 1000')	  # t_int in us
 
 	#enable compensations if needed
 	if enableCompensations:

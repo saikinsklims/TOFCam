@@ -35,12 +35,12 @@ path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\sample
 
 mod_frequ = 10
 exposure = 3500
-offset = -2200
 
-img_buffer_length = 10
+img_direction_buffer_length = 10
+image_avg_buffer_length = 500
 
-amplthreshMax = 65000
-amplthreshMin = 15
+height_correction_scale = 0.9447
+height_correction_offset = 341
 
 
 class Thread(QThread):
@@ -55,22 +55,6 @@ class Thread(QThread):
 
     """
 
-    cam = None
-    running = False
-
-    try:
-        server = epc_server('192.168.1.80') # Ethernet connection
-        image_epcDev = epc_image(server)
-        # init whole imager
-        imager.imagerInit(server, image_epcDev)
-        cam = True
-    except:
-        print("[INFO]: Cant connect to server")
-        cam = False
-
-    # img = image_epcDev.getDCSs()
-
-    # signals
     change_pixmap = pyqtSignal(QImage, QImage)  # indicate redraw of image
     update_config = pyqtSignal(str, bool)       # request change of exposure
     update_gui = pyqtSignal(int)                # return changed exposure
@@ -78,33 +62,95 @@ class Thread(QThread):
     change_height = pyqtSignal(float, bool)     # indicate a new height
     new_person = pyqtSignal()                   # indicate a new person
 
-    _auto = False
-    _exposure = 1
-    _update_cam = False
-    _threshold = 200                            # objects taller than 0.2m only
+    def __init__(self, QThread):
+        """
+        Constructor
 
-    # image buffer for direction estimation
-    _img_buffer = deque()
+        Parameters
+        ----------
+        QThread : QThread
+            The parent thread.
 
-    # buffer for the position of the person
-    _pos_buffer = []
+        Returns
+        -------
+        None.
 
-    # TODO for testing purposes only
-    # with open(path1, 'rb') as file:
-    #     data_dist = pickle.load(file)
-    #     cam = True
-    # with open(path2, 'rb') as file:
-    #     data_ampl = pickle.load(file)
+        """
+        super().__init__()
+        self._cam = None
+        self._running = False
 
-    # pool_data = cycle(data_dist)
-    # pool_ampl = cycle(data_ampl)
+        try:
+            self._server = epc_server('192.168.1.80') # Ethernet connection
+            self._image_epcDev = epc_image(self._server)
+            # init whole imager
+            self._imager.imagerInit(self._server, image_epcDev)
+            self._cam = True
+        except:
+            print("[INFO]: Cant connect to server")
+            self._cam = False
 
-    # get height and width of images
-    height, width = 60, 160
+        img = image_epcDev.getDCSs()
 
-    # create an empty offset-images and a random gray image
-    d_offset = np.zeros((height, width))
-    gray = np.random.rand(height, width) * 30
+        # signals
+
+        self.auto = False                       # flag for auto background
+        self._exposure = 1                      # exposure value
+        self._update_cam = False                # flag when cam needs update
+        self._threshold = 200                   # objects taller than 0.2m only
+
+        # image buffer for direction estimation
+        self._img_buffer = deque()
+
+        # buffer for the position of the person
+        self._pos_buffer = []
+
+        # buffer for the moving average
+        self._img_avg_buffer = deque(maxlen=image_avg_buffer_length)
+
+        # TODO for testing purposes only
+        # with open(path1, 'rb') as file:
+        #     data_dist = pickle.load(file)
+        #     self._cam = True
+        # with open(path2, 'rb') as file:
+        #     data_ampl = pickle.load(file)
+
+        # self.pool_data = cycle(data_dist)
+        # self.pool_ampl = cycle(data_ampl)
+
+        # get height and width of images
+        height, width = 60, 160
+
+        # create random gray image
+        self._gray = np.random.rand(height, width)
+
+        # create a zero background image
+        self._background = np.zeros((height, width))
+
+    @pyqtSlot()
+    def set_background(self):
+        """
+        Capture an image from the hardware and set as background.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self._cam:
+            dist, phase, ampl = self._get_image()
+            self._background = dist
+
+            dist = dist / dist.max() * 255
+            dist = dist.astype('uint8')
+            img_height, img_width = dist.shape
+            convertToQtFormat = QImage(dist, img_width, img_height,
+                                       QImage.Format_Grayscale8)
+            q = convertToQtFormat.scaled(4*img_width, 4*img_height,
+                                         Qt.QtCore.Qt.IgnoreAspectRatio)
+
+            # request an update of the image in the viewer
+            self.change_pixmap.emit(q, q)
 
     def _get_image(self):
         """
@@ -120,14 +166,14 @@ class Thread(QThread):
             The amplitude image.
 
         """
-        # # capture image from hardware
-        img = self.image_epcDev.getDCSs()
+        # capture image from hardware
+        img = self._image_epcDev.getDCSs()
         # calculate the distance, phase and amplitude
         dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
         ampl = epc_math.calc_amplitude(img)
 
         # TODO for testing
-        # dist = next(self.pool_data).astype('float32') + offset
+        # dist = next(self.pool_data).astype('float32')
         # phase = dist.copy()
         # ampl = next(self.pool_ampl).astype('float32')
         # time.sleep(0.5)
@@ -176,7 +222,8 @@ class Thread(QThread):
         height = np.max(img_blur)
         height = round(height, 2)
 
-        height = height * 0.9447 - 341
+        # correction of systematic linear height error
+        height = height * height_correction_scale - height_correction_offset
 
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
@@ -235,7 +282,7 @@ class Thread(QThread):
         None.
 
         """
-        self.running = False
+        self._running = False
 
         # disconnect the slots
         self.update_config.disconnect()
@@ -249,39 +296,41 @@ class Thread(QThread):
         None.
 
         """
-        self.running = True
+        self._running = True
 
         # connect the slots
         self.update_config.connect(self._update_exposure)
 
         # fill the dist image buffer
-        for idx in range(img_buffer_length):
+        for idx in range(img_direction_buffer_length):
             dist, phase, ampl = self._get_image()
             self._img_buffer.append(dist)
 
         # put a dist image in the average buffer
-        img_sum = dist.astype('float64')
-        img_count = 1
+        self._img_avg_buffer.append(dist)
 
-        while self.running and self.cam:
+        while self._running and self._cam:
 
             dist, phase, ampl = self._get_image()
 
             if dist is not None:
-                img_count += 1
 
                 # put the image into the average
-                img_sum += dist
-                img_avg = np.round(img_sum / img_count)
-                if (img_count == 250):
-                    img_sum = img_avg
-                    img_count = 1
+                if self.auto:
+                    self._img_avg_buffer.append(dist)
+                    img_avg = 0
+                    for element in self._img_avg_buffer:
+                        img_avg += element
+
+                    img_avg /= len(self._img_avg_buffer)
+                else:
+                    img_avg = self._background
 
                 # img_view = self._exposure * img_view        # FIXME
 
                 # get some quality measures
                 quality, noise = epc_math.check_signal_quality(ampl,
-                                                               self.gray,
+                                                               self._gray,
                                                                self._exposure)
 
                 # get the height and the height position
@@ -345,8 +394,8 @@ class Thread(QThread):
 
             if self._update_cam:
                 # TODO change camera settings
-                self.server.sendCommand('setIntegrationTime2D {}'.format(self._exposure))	 # t_int in us
-                self.server.sendCommand('setIntegrationTime3D {}'.format(self._exposure))	  # t_int in us
+                self._server.sendCommand('setIntegrationTime2D {}'.format(self._exposure))	 # t_int in us
+                self._server.sendCommand('setIntegrationTime3D {}'.format(self._exposure))	  # t_int in us
                 self.update_gui.emit(self._exposure)
                 self._update_cam = False
 
@@ -409,6 +458,8 @@ class App(QMainWindow):
         self.stop_live_Button.clicked.connect(self._stop_live)
         self.th.update_gui.connect(self._update_exposure_gui)
         self.exposure_LineEdit.editingFinished.connect(self._change_exposure)
+        self.auto_background_CheckBox.stateChanged.connect(self._auto_background)
+        self.set_background_Button.clicked.connect(self.th.set_background)
         # self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
         self.th.change_pixmap.connect(self._set_image)
         self.th.change_direction.connect(self._show_direction)
@@ -431,6 +482,27 @@ class App(QMainWindow):
         self.stop_live_Button.setEnabled(False)
 
         self.counter = 0
+
+    @pyqtSlot(int)
+    def _auto_background(self, state):
+        """
+        Is triggered when the auto background checkbox is un/checked. Sets
+        the auto background flag in the acquisition thread.
+
+        Parameters
+        ----------
+        state : int
+            CheckState of the CheckBox.
+
+        Returns
+        -------
+        None.
+
+        """
+        if state == 2:
+            self.th.auto = True
+        elif state == 0:
+            self.th.auto = False
 
     @pyqtSlot(float, bool)
     def _show_height(self, height, correct_height):
@@ -555,6 +627,8 @@ class App(QMainWindow):
         """
         self.capture_live_Button.setEnabled(False)
         self.stop_live_Button.setEnabled(True)
+        self.set_background_Button.setEnabled(False)
+        self.auto_background_CheckBox.setEnabled(False)
 
         # start the capture
         self.th.start()
@@ -570,6 +644,8 @@ class App(QMainWindow):
         """
         self.capture_live_Button.setEnabled(True)
         self.stop_live_Button.setEnabled(False)
+        self.set_background_Button.setEnabled(True)
+        self.auto_background_CheckBox.setEnabled(True)
 
         # stop capture
         self.th.stop()

@@ -55,6 +55,7 @@ class Thread(QThread):
 
     """
 
+    # signals
     change_pixmap = pyqtSignal(QImage, QImage)  # indicate redraw of image
     update_config = pyqtSignal(str, bool)       # request change of exposure
     update_gui = pyqtSignal(int)                # return changed exposure
@@ -81,18 +82,15 @@ class Thread(QThread):
         self._running = False
 
         try:
-            self._server = epc_server('192.168.1.80') # Ethernet connection
+            # Ethernet connection
+            self._server = epc_server('192.168.1.80')
             self._image_epcDev = epc_image(self._server)
             # init whole imager
-            self._imager.imagerInit(self._server, image_epcDev)
+            self._imager.imagerInit(self._server, self._image_epcDev)
             self._cam = True
         except:
             print("[INFO]: Cant connect to server")
             self._cam = False
-
-        img = image_epcDev.getDCSs()
-
-        # signals
 
         self.auto = False                       # flag for auto background
         self._exposure = 1                      # exposure value
@@ -326,8 +324,6 @@ class Thread(QThread):
                 else:
                     img_avg = self._background
 
-                # img_view = self._exposure * img_view        # FIXME
-
                 # get some quality measures
                 quality, noise = epc_math.check_signal_quality(ampl,
                                                                self._gray,
@@ -352,7 +348,7 @@ class Thread(QThread):
                 if height > 200:
                     img_view = cv2.circle(img_view, (pos[1], pos[0]),
                                           10, (0, 0, 255))
-                # TODO check correct position orientation
+
                 convertToQtFormat = QImage(img_view, img_width, img_height,
                                            QImage.Format_RGB888)
                 p = convertToQtFormat.scaled(4*img_width, 4*img_height,
@@ -378,19 +374,6 @@ class Thread(QThread):
                 elif height < 1000:
                     pos = [0, 0]
                 self._pos_buffer = pos
-
-
-            # check if the exposure settings need to be updated
-
-            # if auto exposure
-            # TODO incorperate noise estimate and control that as well
-            # if self._auto:
-            #     # increase exposure until pixel intensity is good
-            #     if quality < 0:
-            #         self._exposure += 1
-            #     elif quality > 0:
-            #         self._exposure -= 1
-            #     self._update_cam = True
 
             if self._update_cam:
                 # TODO change camera settings
@@ -460,11 +443,11 @@ class App(QMainWindow):
         self.exposure_LineEdit.editingFinished.connect(self._change_exposure)
         self.auto_background_CheckBox.stateChanged.connect(self._auto_background)
         self.set_background_Button.clicked.connect(self.th.set_background)
-        # self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
+        self.reset_counter_Button.clicked.connect(self._reset_counter)
         self.th.change_pixmap.connect(self._set_image)
         self.th.change_direction.connect(self._show_direction)
         self.th.change_height.connect(self._show_height)
-        self.th.new_person.connect(self._increment_Counter)
+        self.th.new_person.connect(self._increment_counter)
 
         # hide the line widgets
         self.line_up.setVisible(False)
@@ -481,7 +464,20 @@ class App(QMainWindow):
         self.stop_live_Button.setIconSize(QSize(50, 50))
         self.stop_live_Button.setEnabled(False)
 
-        self.counter = 0
+        self._counter = 0
+
+    @pyqtSlot()
+    def _reset_counter(self):
+        """
+        Reset the person counter.
+
+        Returns
+        -------
+        None.
+
+        """
+        self._counter = -1
+        self._increment_counter()
 
     @pyqtSlot(int)
     def _auto_background(self, state):
@@ -529,7 +525,7 @@ class App(QMainWindow):
             self.height_label.setStyleSheet("QLabel { background-color : red; color : black; }")
 
     @pyqtSlot()
-    def _increment_Counter(self):
+    def _increment_counter(self):
         """
         Increment the person counter and show the new count.
 
@@ -538,8 +534,8 @@ class App(QMainWindow):
         None.
 
         """
-        self.counter += 1
-        self.count_label.setText('{}'.format(self.counter))
+        self._counter += 1
+        self.count_label.setText('{}'.format(self._counter))
 
     @pyqtSlot(int)
     def _show_direction(self, direction):

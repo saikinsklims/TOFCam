@@ -221,7 +221,7 @@ class Thread(QThread):
         height = round(height, 2)
 
         # correction of systematic linear height error
-        height = height * height_correction_scale - height_correction_offset
+        height = self._height_correction(height)
 
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
@@ -231,6 +231,27 @@ class Thread(QThread):
         if (50 < pos[1] < 100):
             correct_height = True
         return height, correct_height, pos
+
+    def _height_correction(self, height):
+        """
+        Correct the given height according to the polynomial correction
+
+        Parameters
+        ----------
+        height : float
+            The height to be corrected.
+
+        Returns
+        -------
+        height_corrected : float
+            The corrected height.
+
+        """
+
+        height_corrected = height * height_correction_scale
+        height_corrected -= height_correction_offset
+
+        return height_corrected
 
     def _get_direction(self, image, background):
         """

@@ -353,7 +353,7 @@
       <string>Auto Background</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="reset_count_Button">
+    <widget class="QPushButton" name="reset_counter_Button">
      <property name="geometry">
       <rect>
        <x>20</x>

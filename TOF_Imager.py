@@ -81,16 +81,17 @@ class Thread(QThread):
         self._cam = None
         self._running = False
 
-        # try:
-        #     # Ethernet connection
-        #     self._server = epc_server('192.168.1.80')
-        #     self._image_epcDev = epc_image(self._server)
-        #     # init whole imager
-        #     self._imager.imagerInit(self._server, self._image_epcDev)
-        #     self._cam = True
-        # except:
-        #     print("[INFO]: Cant connect to server")
-        #     self._cam = False
+        # TODO
+        try:
+            # Ethernet connection
+            self._server = epc_server('192.168.1.80')
+            self._image_epcDev = epc_image(self._server)
+            # init whole imager
+            self._imager.imagerInit(self._server, self._image_epcDev)
+            self._cam = True
+        except:
+            print("[INFO]: Cant connect to server")
+            self._cam = False
 
         self.auto_background = False            # flag for auto background
         self._auto_exposure = False             # flag for auto exposure
@@ -108,14 +109,14 @@ class Thread(QThread):
         self._img_avg_buffer = deque(maxlen=image_avg_buffer_length)
 
         # TODO for testing purposes only
-        with open(path1, 'rb') as file:
-            data_dist = pickle.load(file)
-            self._cam = True
-        with open(path2, 'rb') as file:
-            data_ampl = pickle.load(file)
+        # with open(path1, 'rb') as file:
+        #     data_dist = pickle.load(file)
+        #     self._cam = True
+        # with open(path2, 'rb') as file:
+        #     data_ampl = pickle.load(file)
 
-        self.pool_data = cycle(data_dist)
-        self.pool_ampl = cycle(data_ampl)
+        # self.pool_data = cycle(data_dist)
+        # self.pool_ampl = cycle(data_ampl)
 
         # get height and width of images
         height, width = 60, 160
@@ -169,16 +170,16 @@ class Thread(QThread):
 
         """
         # capture image from hardware
-        # img = self._image_epcDev.getDCSs()
-        # # calculate the distance, phase and amplitude
-        # dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
-        # ampl = epc_math.calc_amplitude(img)
+        img = self._image_epcDev.getDCSs()
+        # calculate the distance, phase and amplitude
+        dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+        ampl = epc_math.calc_amplitude(img)
 
         # TODO for testing
-        dist = next(self.pool_data).astype('float32')
-        phase = dist.copy()
-        ampl = next(self.pool_ampl).astype('float32')
-        time.sleep(0.5)
+        # dist = next(self.pool_data).astype('float32')
+        # phase = dist.copy()
+        # ampl = next(self.pool_ampl).astype('float32')
+        # time.sleep(0.5)
 
         # do some noise suppresion
         dist = dist.astype('float32')
@@ -297,8 +298,6 @@ class Thread(QThread):
         """
         self._running = True
 
-
-
         # fill the dist image buffer
         for idx in range(img_direction_buffer_length):
             dist, phase, ampl = self._get_image()
@@ -384,8 +383,8 @@ class Thread(QThread):
 
             if self._update_cam:
                 # TODO change camera settings
-                # self._server.sendCommand('setIntegrationTime2D {}'.format(self._exposure))	 # t_int in us
-                # self._server.sendCommand('setIntegrationTime3D {}'.format(self._exposure))	  # t_int in us
+                self._server.sendCommand('setIntegrationTime2D {}'.format(self._exposure))	 # t_int in us
+                self._server.sendCommand('setIntegrationTime3D {}'.format(self._exposure))	  # t_int in us
                 print("change exposure to: {}".format(self._exposure))
                 self.update_gui.emit(self._exposure)
                 self._update_cam = False

@@ -86,7 +86,7 @@ class Thread(QThread):
             self._server = epc_server('192.168.1.80')
             self._image_epcDev = epc_image(self._server)
             # init whole imager
-            self._imager.imagerInit(self._server, self._image_epcDev)
+            imager.imagerInit(self._server, self._image_epcDev)
             self._cam = True
         except:
             print("[INFO]: Cant connect to server")

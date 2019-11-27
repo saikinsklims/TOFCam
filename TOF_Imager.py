@@ -34,7 +34,6 @@ path1 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\sample
 path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\ampImageWithMotion.p'
 
 mod_frequ = 10
-exposure = 3500
 
 img_direction_buffer_length = 10
 image_avg_buffer_length = 500

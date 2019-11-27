@@ -65,6 +65,7 @@ def calc_amplitude(dcs):
 
     """
 
+    dcs = dcs.astype(float)
     ampl = 0.5 * np.sqrt((dcs[:, :, 3] - dcs[:, :, 1])**2 +
                          (dcs[:, :, 2] - dcs[:, :, 0])**2)
 

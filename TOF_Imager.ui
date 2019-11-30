@@ -187,7 +187,7 @@
       <string notr="true" extracomment="Numeric values only"/>
      </property>
      <property name="text">
-      <string>3500</string>
+      <string>500</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -237,7 +237,7 @@
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>140</y>
+       <y>220</y>
        <width>131</width>
        <height>51</height>
       </rect>
@@ -258,7 +258,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>140</y>
+       <y>220</y>
        <width>101</width>
        <height>51</height>
       </rect>
@@ -279,7 +279,7 @@
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>190</y>
+       <y>270</y>
        <width>131</width>
        <height>51</height>
       </rect>
@@ -300,7 +300,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>190</y>
+       <y>270</y>
        <width>101</width>
        <height>51</height>
       </rect>
@@ -357,7 +357,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>240</y>
+       <y>320</y>
        <width>211</width>
        <height>51</height>
       </rect>
@@ -369,6 +369,24 @@
      </property>
      <property name="text">
       <string>reset count</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="auto_exposure_CheckBox">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>130</y>
+       <width>191</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>16</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Auto Exposure</string>
      </property>
     </widget>
    </widget>

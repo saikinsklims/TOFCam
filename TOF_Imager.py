@@ -34,7 +34,6 @@ path1 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\sample
 path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\ampImageWithMotion.p'
 
 mod_frequ = 10
-exposure = 3500
 
 img_direction_buffer_length = 10
 image_avg_buffer_length = 500
@@ -81,18 +80,20 @@ class Thread(QThread):
         self._cam = None
         self._running = False
 
+        # TODO
         try:
             # Ethernet connection
             self._server = epc_server('192.168.1.80')
             self._image_epcDev = epc_image(self._server)
-            # init whole imager
             imager.imagerInit(self._server, self._image_epcDev)
             self._cam = True
-        except:
+        except Exception as e:
             print("[INFO]: Cant connect to server")
+            print(str(e))
             self._cam = False
 
-        self.auto = False                       # flag for auto background
+        self.auto_background = False            # flag for auto background
+        self._auto_exposure = False             # flag for auto exposure
         self._exposure = 1                      # exposure value
         self._update_cam = False                # flag when cam needs update
         self._threshold = 200                   # objects taller than 0.2m only
@@ -124,6 +125,9 @@ class Thread(QThread):
 
         # create a zero background image
         self._background = np.zeros((height, width))
+
+        # connect the slots
+        self.update_config.connect(self._update_exposure)
 
     @pyqtSlot()
     def set_background(self):
@@ -247,7 +251,6 @@ class Thread(QThread):
             The corrected height.
 
         """
-
         height_corrected = height * height_correction_scale
         height_corrected -= height_correction_offset
 
@@ -303,9 +306,6 @@ class Thread(QThread):
         """
         self._running = False
 
-        # disconnect the slots
-        self.update_config.disconnect()
-
     def run(self):
         """
         Called by Thread.start(); actually containing the work.
@@ -316,9 +316,6 @@ class Thread(QThread):
 
         """
         self._running = True
-
-        # connect the slots
-        self.update_config.connect(self._update_exposure)
 
         # fill the dist image buffer
         for idx in range(img_direction_buffer_length):
@@ -335,7 +332,7 @@ class Thread(QThread):
             if dist is not None:
 
                 # put the image into the average
-                if self.auto:
+                if self.auto_background:
                     self._img_avg_buffer.append(dist)
                     img_avg = 0
                     for element in self._img_avg_buffer:
@@ -349,6 +346,16 @@ class Thread(QThread):
                 quality, noise = epc_math.check_signal_quality(ampl,
                                                                self._gray,
                                                                self._exposure)
+                # change exposure time if required by quality check
+                if quality == -1 and self._auto_exposure:
+                    self._exposure = self._exposure * 1.25
+                    # clip exposure at 4000 due to hardware limit
+                    if self._exposure > 4000:
+                        self._exposure = 4000
+                    self._update_cam = True
+                elif quality == 1 and self._auto_exposure:
+                    self._exposure = self._exposure * 0.9
+                    self._update_cam = True
 
                 # get the height and the height position
                 height, pos_correct, pos = self._get_height(dist.copy(),
@@ -397,7 +404,6 @@ class Thread(QThread):
                 self._pos_buffer = pos
 
             if self._update_cam:
-                # TODO change camera settings
                 self._server.sendCommand('setIntegrationTime2D {}'.format(self._exposure))	 # t_int in us
                 self._server.sendCommand('setIntegrationTime3D {}'.format(self._exposure))	  # t_int in us
                 self.update_gui.emit(self._exposure)
@@ -421,7 +427,7 @@ class Thread(QThread):
 
         """
         self._exposure = int(value)
-        self._auto = auto
+        self._auto_exposure = auto
 
         # request change of settings in next cycle
         self._update_cam = True
@@ -463,6 +469,7 @@ class App(QMainWindow):
         self.th.update_gui.connect(self._update_exposure_gui)
         self.exposure_LineEdit.editingFinished.connect(self._change_exposure)
         self.auto_background_CheckBox.stateChanged.connect(self._auto_background)
+        self.auto_exposure_CheckBox.stateChanged.connect(self._change_exposure)
         self.set_background_Button.clicked.connect(self.th.set_background)
         self.reset_counter_Button.clicked.connect(self._reset_counter)
         self.th.change_pixmap.connect(self._set_image)
@@ -606,8 +613,7 @@ class App(QMainWindow):
 
         """
         value = self.exposure_LineEdit.text()
-        # flag = bool(self.auto_exposure_CheckBox.isChecked())
-        flag = False
+        flag = bool(self.auto_exposure_CheckBox.isChecked())
         self.exposure_LineEdit.setEnabled(not flag)
 
         # request a change of the configuration
@@ -685,7 +691,10 @@ if __name__ == '__main__':
     if not os.path.exists('TOF_Imager.ui'):
         print('No ui-file found')
         exit()
-    app = QApplication(sys.argv)
+    if not QApplication.instance():
+        app = QApplication(sys.argv)
+    else:
+        app = QApplication.instance()
     ex = App()
     ex.show()
-    sys.exit(app.exec_())
+    app.exec_()

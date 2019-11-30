@@ -85,11 +85,11 @@ class Thread(QThread):
             # Ethernet connection
             self._server = epc_server('192.168.1.80')
             self._image_epcDev = epc_image(self._server)
-            # init whole imager
             imager.imagerInit(self._server, self._image_epcDev)
             self._cam = True
-        except:
+        except Exception as e:
             print("[INFO]: Cant connect to server")
+            print(str(e))
             self._cam = False
 
         self.auto_background = False            # flag for auto background
@@ -328,10 +328,13 @@ class Thread(QThread):
                                                                self._exposure)
                 # change exposure time if required by quality check
                 if quality == -1 and self._auto_exposure:
-                    self._exposure = self._exposure * 1.5
+                    self._exposure = self._exposure * 1.25
+                    # clip exposure at 4000 due to hardware limit
+                    if self._exposure > 4000:
+                        self._exposure = 4000
                     self._update_cam = True
                 elif quality == 1 and self._auto_exposure:
-                    self._exposure = self._exposure * 0.75
+                    self._exposure = self._exposure * 0.9
                     self._update_cam = True
 
                 # get the height and the height position
@@ -381,10 +384,8 @@ class Thread(QThread):
                 self._pos_buffer = pos
 
             if self._update_cam:
-                # TODO change camera settings
                 self._server.sendCommand('setIntegrationTime2D {}'.format(self._exposure))	 # t_int in us
                 self._server.sendCommand('setIntegrationTime3D {}'.format(self._exposure))	  # t_int in us
-                print("change exposure to: {}".format(self._exposure))
                 self.update_gui.emit(self._exposure)
                 self._update_cam = False
 

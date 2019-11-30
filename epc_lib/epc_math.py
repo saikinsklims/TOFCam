@@ -118,9 +118,15 @@ def check_signal_quality(ampl, gray, exposure):
     tmp2 = (ampl < 2000).sum() - tmp1
     tmp3 = (2000 < ampl).sum()
 
+    # too many under exposed pixels
     if (tmp1 > tmp2):
         quality = -1
+    # too many overexposed pixels
     elif(tmp3 > tmp2):
+        quality = 1
+
+    # if there are no underexposed pixels reduce exposure a bit
+    if (tmp1 < 10):
         quality = 1
 
     return quality, noise

@@ -187,7 +187,7 @@
       <string notr="true" extracomment="Numeric values only"/>
      </property>
      <property name="text">
-      <string>3500</string>
+      <string>500</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>

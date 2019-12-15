@@ -76,7 +76,7 @@ class Thread(QThread):
         # TODO
         try:
             # Ethernet connection
-            self._server = epc_server('192.168.1.80')
+            self._server = epc_server(config['server_ip'])
             self._image_epcDev = epc_image(self._server)
             imager.imagerInit(self._server, self._image_epcDev)
             self._cam = True
@@ -89,7 +89,7 @@ class Thread(QThread):
         self._auto_exposure = False             # flag for auto exposure
         self._exposure = 1                      # exposure value
         self._update_cam = False                # flag when cam needs update
-        self._threshold = 200                   # objects taller than 0.2m only
+        self._threshold = config['min_object_height']  # objects taller than 0.2m only
 
         # image buffer for direction estimation
         self._img_buffer = deque()
@@ -98,7 +98,7 @@ class Thread(QThread):
         self._pos_buffer = []
 
         # buffer for the moving average
-        self._img_avg_buffer = deque(maxlen=config['image_avg_buffer_length'])
+        self._img_avg_buffer = deque(maxlen=config['img_avg_buffer_length'])
 
         # TODO for testing purposes only
         # with open(path1, 'rb') as file:
@@ -111,7 +111,7 @@ class Thread(QThread):
         # self.pool_ampl = cycle(data_ampl)
 
         # get height and width of images
-        height, width = 60, 160
+        height, width = config['img_height'], config['img_width']
 
         # create random gray image
         self._gray = np.random.rand(height, width)
@@ -225,7 +225,9 @@ class Thread(QThread):
         pos = np.unravel_index(tmp_pos, img_blur.shape)
         pos_correct = False
         # check correct position for correct height calculation
-        if (50 < pos[1] < 100):
+        min_pos = config['min_object_position']
+        max_pos = config['max_object_position']
+        if (min_pos < pos[1] < max_pos):
             pos_correct = True
         return height, pos_correct, pos
 
@@ -343,8 +345,8 @@ class Thread(QThread):
                 if quality == -1 and self._auto_exposure:
                     self._exposure = self._exposure * 1.25
                     # clip exposure at 4000 due to hardware limit
-                    if self._exposure > 4000:
-                        self._exposure = 4000
+                    if self._exposure > config['exposure_max']:
+                        self._exposure = config['exposure_max']
                     self._update_cam = True
                 elif quality == 1 and self._auto_exposure:
                     self._exposure = self._exposure * 0.9
@@ -365,8 +367,8 @@ class Thread(QThread):
                 img_view = img_view.astype('uint8')
                 img_height, img_width = img_view.shape
                 img_view = cv2.cvtColor(img_view, cv2.COLOR_GRAY2BGR)
-                # draw a circle aroud person, but only if taller than 0.5m
-                if height > 200:
+                # draw a circle around person, but only if taller than 0.2m
+                if height > config['min_object_height']:
                     img_view = cv2.circle(img_view, (pos[1], pos[0]),
                                           10, (0, 0, 255))
 
@@ -387,12 +389,13 @@ class Thread(QThread):
                 self.change_pixmap.emit(p, q)
                 # it is a new person, when the person is suddenly at a
                 # different place and taller than 1000
-                if self._pos_buffer == [0, 0] and height > 1000:
+                limit = config['min_person_height']
+                if self._pos_buffer == [0, 0] and height > limit:
                     # tmp = self._pos_buffer
                     # diff_x = abs(tmp[0] - pos[0])
                     # if diff_x > 30:
                     self.new_person.emit()
-                elif height < 1000:
+                elif height < limit:
                     pos = [0, 0]
                 self._pos_buffer = pos
 
@@ -691,9 +694,9 @@ if __name__ == '__main__':
     for line in lines:
         key, value = line.split('=')
         key = key.strip()
-        if key != 'error_polynom':
-            value = float(value.strip())
-        else:
+        if key != 'error_polynom' and key != 'server_ip':
+            value = int(value.strip())
+        elif key == 'error_polynom':
             value = np.fromstring(value, float, sep=',')
         config.update({key: value})
     # load graphical user interface

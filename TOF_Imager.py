@@ -8,7 +8,8 @@ Main application script for the ToF Imager
 @author: rjaco
 """
 
-import os, sys
+import os
+import sys
 import numpy as np
 import PyQt5 as Qt
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QCoreApplication, QSize
@@ -26,20 +27,12 @@ from imager import imager
 
 
 # TODO for testing purposes only
-import pdb
-import pickle
-import time
-from itertools import cycle
-path1 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\distImageWithMotion.p'
-path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\ampImageWithMotion.p'
-
-mod_frequ = 10
-
-img_direction_buffer_length = 10
-image_avg_buffer_length = 500
-
-height_correction_scale = 0.9447
-height_correction_offset = 341
+# import pdb
+# import pickle
+# import time
+# from itertools import cycle
+# path1 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\distImageWithMotion.p'
+# path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\ampImageWithMotion.p'
 
 
 class Thread(QThread):
@@ -105,7 +98,7 @@ class Thread(QThread):
         self._pos_buffer = []
 
         # buffer for the moving average
-        self._img_avg_buffer = deque(maxlen=image_avg_buffer_length)
+        self._img_avg_buffer = deque(maxlen=config['image_avg_buffer_length'])
 
         # TODO for testing purposes only
         # with open(path1, 'rb') as file:
@@ -171,7 +164,7 @@ class Thread(QThread):
         # capture image from hardware
         img = self._image_epcDev.getDCSs()
         # calculate the distance, phase and amplitude
-        dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+        dist, phase = epc_math.calc_dist_phase(img, config['mod_frequ'], 0)
         ampl = epc_math.calc_amplitude(img)
 
         # TODO for testing
@@ -201,7 +194,7 @@ class Thread(QThread):
         -------
         height : float
             The calculated height of the object.
-        correct_height: bool
+        pos_correct: bool
             Check if height is within the correct position
         pos : numpy array
             Position of the person
@@ -230,11 +223,11 @@ class Thread(QThread):
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
         pos = np.unravel_index(tmp_pos, img_blur.shape)
-        correct_height = False
+        pos_correct = False
         # check correct position for correct height calculation
         if (50 < pos[1] < 100):
-            correct_height = True
-        return height, correct_height, pos
+            pos_correct = True
+        return height, pos_correct, pos
 
     def _height_correction(self, height):
         """
@@ -251,8 +244,8 @@ class Thread(QThread):
             The corrected height.
 
         """
-        height_corrected = height * height_correction_scale
-        height_corrected -= height_correction_offset
+        error = np.polyval(config['error_polynom'], height)
+        height_corrected = height - error
 
         return height_corrected
 
@@ -318,7 +311,7 @@ class Thread(QThread):
         self._running = True
 
         # fill the dist image buffer
-        for idx in range(img_direction_buffer_length):
+        for idx in range(config['img_direction_buffer_length']):
             dist, phase, ampl = self._get_image()
             self._img_buffer.append(dist)
 
@@ -529,7 +522,7 @@ class App(QMainWindow):
             self.th.auto = False
 
     @pyqtSlot(float, bool)
-    def _show_height(self, height, correct_height):
+    def _show_height(self, height, pos_correct):
         """
         Display the new height.
 
@@ -537,7 +530,7 @@ class App(QMainWindow):
         ----------
         height : float
             The new height.
-        correct_height: bool
+        pos_correct: bool
             Indicator if height position is correct.
 
         Returns
@@ -547,7 +540,7 @@ class App(QMainWindow):
         """
         self.height_label.setText('{0:.2f} mm'.format(height))
 
-        if correct_height:
+        if pos_correct:
             self.height_label.setStyleSheet("QLabel { background-color : green; color : white; }")
         else:
             self.height_label.setStyleSheet("QLabel { background-color : red; color : black; }")
@@ -688,6 +681,22 @@ class App(QMainWindow):
 
 
 if __name__ == '__main__':
+    # load configuration
+    if not os.path.exists('config.ini'):
+        print('No configuration-file found')
+        exit()
+    with open('config.ini', 'r') as file:
+        lines = file.readlines()
+    config = {}
+    for line in lines:
+        key, value = line.split('=')
+        key = key.strip()
+        if key != 'error_polynom':
+            value = float(value.strip())
+        else:
+            value = np.fromstring(value, float, sep=',')
+        config.update({key: value})
+    # load graphical user interface
     if not os.path.exists('TOF_Imager.ui'):
         print('No ui-file found')
         exit()

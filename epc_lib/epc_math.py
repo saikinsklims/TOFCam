@@ -129,7 +129,7 @@ def check_signal_quality(ampl, gray, exposure):
         quality = 1
 
     # if there are no underexposed pixels reduce exposure a bit
-    if (tmp1 < 10):
+    if (tmp1 < 1500):
         quality = 1
 
     return quality, noise
@@ -154,6 +154,7 @@ def distance_correction(dist, error_polynom):
     """
     dist = dist.astype('float32')
     error = np.polyval(error_polynom, dist)
-    dist = dist - error
+    # neglect distances below 300
+    # dist = np.where(dist < 300, dist, dist-error)
 
     return dist

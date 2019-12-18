@@ -27,7 +27,7 @@ from imager import imager
 
 
 # TODO for testing purposes only
-# import pdb
+import pdb
 # import pickle
 # import time
 # from itertools import cycle
@@ -176,9 +176,13 @@ class Thread(QThread):
         # do some noise suppresion
         dist = dist.astype('float32')
         dist = cv2.medianBlur(dist, 7)
+        with open('dist.tmp', 'wb') as file:
+            dist.tofile(file)
 
         # correction of the distance error
         dist = epc_math.distance_correction(dist, config['error_polynom'])
+        with open('dist_corrected.tmp', 'wb') as file:
+            dist.tofile(file)
 
         return dist, phase, ampl
 
@@ -321,6 +325,7 @@ class Thread(QThread):
                 quality, noise = epc_math.check_signal_quality(ampl,
                                                                self._gray,
                                                                self._exposure)
+                # pdb.set_trace()
                 # change exposure time if required by quality check
                 if quality == -1 and self._auto_exposure:
                     self._exposure = self._exposure * 1.25
@@ -678,6 +683,8 @@ if __name__ == '__main__':
             value = int(value.strip())
         elif key == 'error_polynom':
             value = np.fromstring(value, float, sep=',')
+        elif key == 'server_ip':
+            value = value.strip()
         config.update({key: value})
     # load graphical user interface
     if not os.path.exists('TOF_Imager.ui'):

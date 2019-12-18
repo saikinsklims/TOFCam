@@ -8,7 +8,8 @@ Main application script for the ToF Imager
 @author: rjaco
 """
 
-import os, sys
+import os
+import sys
 import numpy as np
 import PyQt5 as Qt
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QCoreApplication, QSize
@@ -27,19 +28,11 @@ from imager import imager
 
 # TODO for testing purposes only
 import pdb
-import pickle
-import time
-from itertools import cycle
-path1 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\distImageWithMotion.p'
-path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\ampImageWithMotion.p'
-
-mod_frequ = 10
-
-img_direction_buffer_length = 10
-image_avg_buffer_length = 500
-
-height_correction_scale = 0.9447
-height_correction_offset = 341
+# import pickle
+# import time
+# from itertools import cycle
+# path1 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\distImageWithMotion.p'
+# path2 = r'C:\Users\rjaco\Google Drive\Praxisprojekt - TOF-Kamera\Software\samples\ampImageWithMotion.p'
 
 
 class Thread(QThread):
@@ -83,7 +76,7 @@ class Thread(QThread):
         # TODO
         try:
             # Ethernet connection
-            self._server = epc_server('192.168.1.80')
+            self._server = epc_server(config['server_ip'])
             self._image_epcDev = epc_image(self._server)
             imager.imagerInit(self._server, self._image_epcDev)
             self._cam = True
@@ -96,7 +89,7 @@ class Thread(QThread):
         self._auto_exposure = False             # flag for auto exposure
         self._exposure = 1                      # exposure value
         self._update_cam = False                # flag when cam needs update
-        self._threshold = 200                   # objects taller than 0.2m only
+        self._threshold = config['min_object_height']  # objects taller than 0.2m only
 
         # image buffer for direction estimation
         self._img_buffer = deque()
@@ -105,7 +98,7 @@ class Thread(QThread):
         self._pos_buffer = []
 
         # buffer for the moving average
-        self._img_avg_buffer = deque(maxlen=image_avg_buffer_length)
+        self._img_avg_buffer = deque(maxlen=config['img_avg_buffer_length'])
 
         # TODO for testing purposes only
         # with open(path1, 'rb') as file:
@@ -118,7 +111,7 @@ class Thread(QThread):
         # self.pool_ampl = cycle(data_ampl)
 
         # get height and width of images
-        height, width = 60, 160
+        height, width = config['img_height'], config['img_width']
 
         # create random gray image
         self._gray = np.random.rand(height, width)
@@ -171,7 +164,9 @@ class Thread(QThread):
         # capture image from hardware
         img = self._image_epcDev.getDCSs()
         # calculate the distance, phase and amplitude
-        dist, phase = epc_math.calc_dist_phase(img, mod_frequ, 0)
+        dist, phase = epc_math.calc_dist_phase(img, config['mod_frequ'], 0)
+        # correction of the distance error
+        dist = epc_math.distance_correction(dist, config['error_polynom'])
         ampl = epc_math.calc_amplitude(img)
 
         # TODO for testing
@@ -201,7 +196,7 @@ class Thread(QThread):
         -------
         height : float
             The calculated height of the object.
-        correct_height: bool
+        pos_correct: bool
             Check if height is within the correct position
         pos : numpy array
             Position of the person
@@ -224,37 +219,16 @@ class Thread(QThread):
         height = np.max(img_blur)
         height = round(height, 2)
 
-        # correction of systematic linear height error
-        height = self._height_correction(height)
-
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
         pos = np.unravel_index(tmp_pos, img_blur.shape)
-        correct_height = False
+        pos_correct = False
         # check correct position for correct height calculation
-        if (50 < pos[1] < 100):
-            correct_height = True
-        return height, correct_height, pos
-
-    def _height_correction(self, height):
-        """
-        Correct the given height according to the polynomial correction
-
-        Parameters
-        ----------
-        height : float
-            The height to be corrected.
-
-        Returns
-        -------
-        height_corrected : float
-            The corrected height.
-
-        """
-        height_corrected = height * height_correction_scale
-        height_corrected -= height_correction_offset
-
-        return height_corrected
+        min_pos = config['min_object_position']
+        max_pos = config['max_object_position']
+        if (min_pos < pos[1] < max_pos):
+            pos_correct = True
+        return height, pos_correct, pos
 
     def _get_direction(self, image, background):
         """
@@ -318,7 +292,7 @@ class Thread(QThread):
         self._running = True
 
         # fill the dist image buffer
-        for idx in range(img_direction_buffer_length):
+        for idx in range(config['img_direction_buffer_length']):
             dist, phase, ampl = self._get_image()
             self._img_buffer.append(dist)
 
@@ -346,12 +320,13 @@ class Thread(QThread):
                 quality, noise = epc_math.check_signal_quality(ampl,
                                                                self._gray,
                                                                self._exposure)
+                # pdb.set_trace()
                 # change exposure time if required by quality check
                 if quality == -1 and self._auto_exposure:
                     self._exposure = self._exposure * 1.25
                     # clip exposure at 4000 due to hardware limit
-                    if self._exposure > 4000:
-                        self._exposure = 4000
+                    if self._exposure > config['exposure_max']:
+                        self._exposure = config['exposure_max']
                     self._update_cam = True
                 elif quality == 1 and self._auto_exposure:
                     self._exposure = self._exposure * 0.9
@@ -372,8 +347,8 @@ class Thread(QThread):
                 img_view = img_view.astype('uint8')
                 img_height, img_width = img_view.shape
                 img_view = cv2.cvtColor(img_view, cv2.COLOR_GRAY2BGR)
-                # draw a circle aroud person, but only if taller than 0.5m
-                if height > 200:
+                # draw a circle around person, but only if taller than 0.2m
+                if height > config['min_object_height']:
                     img_view = cv2.circle(img_view, (pos[1], pos[0]),
                                           10, (0, 0, 255))
 
@@ -394,9 +369,13 @@ class Thread(QThread):
                 self.change_pixmap.emit(p, q)
                 # it is a new person, when the person is suddenly at a
                 # different place and taller than 1000
-                if self._pos_buffer == [0, 0] and height > 1000:
+                limit = config['min_person_height']
+                if self._pos_buffer == [0, 0] and height > limit:
+                    # tmp = self._pos_buffer
+                    # diff_x = abs(tmp[0] - pos[0])
+                    # if diff_x > 30:
                     self.new_person.emit()
-                elif height < 1000:
+                elif height < limit:
                     pos = [0, 0]
                 self._pos_buffer = pos
 
@@ -521,12 +500,12 @@ class App(QMainWindow):
 
         """
         if state == 2:
-            self.th.auto = True
+            self.th.auto_background = True
         elif state == 0:
-            self.th.auto = False
+            self.th.auto_background = False
 
     @pyqtSlot(float, bool)
-    def _show_height(self, height, correct_height):
+    def _show_height(self, height, pos_correct):
         """
         Display the new height.
 
@@ -534,7 +513,7 @@ class App(QMainWindow):
         ----------
         height : float
             The new height.
-        correct_height: bool
+        pos_correct: bool
             Indicator if height position is correct.
 
         Returns
@@ -544,7 +523,7 @@ class App(QMainWindow):
         """
         self.height_label.setText('{0:.2f} mm'.format(height))
 
-        if correct_height:
+        if pos_correct:
             self.height_label.setStyleSheet("QLabel { background-color : green; color : white; }")
         else:
             self.height_label.setStyleSheet("QLabel { background-color : red; color : black; }")
@@ -688,6 +667,24 @@ class App(QMainWindow):
 
 
 if __name__ == '__main__':
+    # load configuration
+    if not os.path.exists('config.ini'):
+        print('No configuration-file found')
+        exit()
+    with open('config.ini', 'r') as file:
+        lines = file.readlines()
+    config = {}
+    for line in lines:
+        key, value = line.split('=')
+        key = key.strip()
+        if key != 'error_polynom' and key != 'server_ip':
+            value = int(value.strip())
+        elif key == 'error_polynom':
+            value = np.fromstring(value, float, sep=',')
+        elif key == 'server_ip':
+            value = value.strip()
+        config.update({key: value})
+    # load graphical user interface
     if not os.path.exists('TOF_Imager.ui'):
         print('No ui-file found')
         exit()

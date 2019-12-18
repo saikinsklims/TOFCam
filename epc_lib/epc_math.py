@@ -155,6 +155,6 @@ def distance_correction(dist, error_polynom):
     dist = dist.astype('float32')
     error = np.polyval(error_polynom, dist)
     # neglect distances below 300
-    # dist = np.where(dist < 300, dist, dist-error)
+    dist = np.where(dist < 300, dist, dist-error)
 
     return dist

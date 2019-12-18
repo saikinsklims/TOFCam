@@ -13,6 +13,7 @@ import numpy as np
 # define variables
 d_unamb = {20: 7.5, 10: 15, 5: 30, 2.5: 60, 1.25: 120}
 
+
 def calc_dist_phase(dcs, led_mod_freq, d_offset):
     """
     Calculate the amplite and phase image from the dcs
@@ -49,6 +50,7 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
 
     return dist.transpose()*1000, phase.transpose()
 
+
 def calc_amplitude(dcs):
     """
     Calculate the signal amplitude from the dcs
@@ -70,6 +72,7 @@ def calc_amplitude(dcs):
                          (dcs[:, :, 2] - dcs[:, :, 0])**2)
 
     return ampl.transpose()
+
 
 def check_signal_quality(ampl, gray, exposure):
     """
@@ -130,3 +133,27 @@ def check_signal_quality(ampl, gray, exposure):
         quality = 1
 
     return quality, noise
+
+
+def distance_correction(dist, error_polynom):
+    """
+    Correction of the systematic distance error by polynom error fit
+
+    Parameters
+    ----------
+    dist : numpy array
+        The distance image.
+    error_polynom : numpy array
+        The error poylnom.
+
+    Returns
+    -------
+    dist : numpy array
+        The error corrected distance image.
+
+    """
+    dist = dist.astype('float32')
+    error = np.polyval(error_polynom, dist)
+    dist = dist - error
+
+    return dist

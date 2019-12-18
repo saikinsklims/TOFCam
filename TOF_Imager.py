@@ -177,6 +177,9 @@ class Thread(QThread):
         dist = dist.astype('float32')
         dist = cv2.medianBlur(dist, 7)
 
+        # correction of the distance error
+        dist = epc_math.distance_correction(dist, config['error_polynom'])
+
         return dist, phase, ampl
 
     def _get_height(self, image, background):
@@ -217,9 +220,6 @@ class Thread(QThread):
         height = np.max(img_blur)
         height = round(height, 2)
 
-        # correction of systematic linear height error
-        height = self._height_correction(height)
-
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
         pos = np.unravel_index(tmp_pos, img_blur.shape)
@@ -230,26 +230,6 @@ class Thread(QThread):
         if (min_pos < pos[1] < max_pos):
             pos_correct = True
         return height, pos_correct, pos
-
-    def _height_correction(self, height):
-        """
-        Correct the given height according to the polynomial correction
-
-        Parameters
-        ----------
-        height : float
-            The height to be corrected.
-
-        Returns
-        -------
-        height_corrected : float
-            The corrected height.
-
-        """
-        error = np.polyval(config['error_polynom'], height)
-        height_corrected = height - error
-
-        return height_corrected
 
     def _get_direction(self, image, background):
         """

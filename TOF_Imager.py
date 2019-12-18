@@ -27,7 +27,7 @@ from imager import imager
 
 
 # TODO for testing purposes only
-import pdb
+# import pdb
 # import pickle
 # import time
 # from itertools import cycle

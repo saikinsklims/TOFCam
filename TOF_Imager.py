@@ -395,9 +395,6 @@ class Thread(QThread):
                 # it is a new person, when the person is suddenly at a
                 # different place and taller than 1000
                 if self._pos_buffer == [0, 0] and height > 1000:
-                    # tmp = self._pos_buffer
-                    # diff_x = abs(tmp[0] - pos[0])
-                    # if diff_x > 30:
                     self.new_person.emit()
                 elif height < 1000:
                     pos = [0, 0]
@@ -562,7 +559,10 @@ class App(QMainWindow):
         None.
 
         """
-        self._counter += 1
+        if self.line_up.isVisible():
+            self._counter += 1
+        elif self.line_down.isVisible():
+            self._counter -= 1
         self.count_label.setText('{}'.format(self._counter))
 
     @pyqtSlot(int)

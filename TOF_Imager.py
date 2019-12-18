@@ -165,6 +165,8 @@ class Thread(QThread):
         img = self._image_epcDev.getDCSs()
         # calculate the distance, phase and amplitude
         dist, phase = epc_math.calc_dist_phase(img, config['mod_frequ'], 0)
+        # correction of the distance error
+        dist = epc_math.distance_correction(dist, config['error_polynom'])
         ampl = epc_math.calc_amplitude(img)
 
         # TODO for testing
@@ -176,13 +178,6 @@ class Thread(QThread):
         # do some noise suppresion
         dist = dist.astype('float32')
         dist = cv2.medianBlur(dist, 7)
-        with open('dist.tmp', 'wb') as file:
-            dist.tofile(file)
-
-        # correction of the distance error
-        dist = epc_math.distance_correction(dist, config['error_polynom'])
-        with open('dist_corrected.tmp', 'wb') as file:
-            dist.tofile(file)
 
         return dist, phase, ampl
 
@@ -505,9 +500,9 @@ class App(QMainWindow):
 
         """
         if state == 2:
-            self.th.auto = True
+            self.th.auto_background = True
         elif state == 0:
-            self.th.auto = False
+            self.th.auto_background = False
 
     @pyqtSlot(float, bool)
     def _show_height(self, height, pos_correct):

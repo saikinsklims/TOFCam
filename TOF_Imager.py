@@ -164,7 +164,8 @@ class Thread(QThread):
         # capture image from hardware
         img = self._image_epcDev.getDCSs()
         # calculate the distance, phase and amplitude
-        dist, phase = epc_math.calc_dist_phase(img, config['mod_frequ'], 0)
+        dist, phase = epc_math.calc_dist_phase(img, config['mod_frequ'],
+                                               config['dist_offset'])
         # correction of the distance error
         dist = epc_math.distance_correction(dist, config['error_polynom'])
         ampl = epc_math.calc_amplitude(img)
@@ -681,6 +682,8 @@ if __name__ == '__main__':
             value = int(value.strip())
         elif key == 'error_polynom':
             value = np.fromstring(value, float, sep=',')
+        elif key == 'dist_offset':
+            value = float(value.strip())
         elif key == 'server_ip':
             value = value.strip()
         config.update({key: value})

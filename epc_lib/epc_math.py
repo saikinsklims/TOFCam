@@ -11,7 +11,7 @@ DCS-images as well as additional stuff.
 import numpy as np
 
 # define variables
-d_unamb = {20: 7.5, 10: 15, 5: 30, 2.5: 60, 1.25: 120}
+d_unamb = {20: 7500, 10: 15000, 5: 30000, 2.5: 60000, 1.25: 120000}
 
 
 def calc_dist_phase(dcs, led_mod_freq, d_offset):
@@ -24,14 +24,13 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
         A numpy array containing the 4 DCS-images
     led_mod_freq : int
         The LED modulation frequency in MHz.
-    d_offset : numpy array, shape (height, width)
-        A numpy array containing the distance offset from the gray-image.
-        Needs same shape as the DCSs
+    d_offset : float
+        Constant distant offset in milli meter
 
     Returns
     -------
     dist : numpy array
-        The distance/amplitude image in meters.
+        The distance/amplitude image in milli meter.
     phase : numpy array
         The phase image in radians.
 
@@ -42,13 +41,14 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
                        (dcs[:, :, 2] - dcs[:, :, 0]))
     phase += np.pi
 
-    dist = d_unamb[led_mod_freq] / 2 / np.pi * phase + d_offset
+    dist = d_unamb[led_mod_freq] / 2 / np.pi * phase  # unit mm
+    dist += d_offset
 
     # take distance roll over into account
     dist[dist > d_unamb[led_mod_freq]] -= d_unamb[led_mod_freq]
     dist[dist < 0] += d_unamb[led_mod_freq]
 
-    return dist.transpose()*1000, phase.transpose()
+    return dist.transpose(), phase.transpose()
 
 
 def calc_amplitude(dcs):
@@ -154,7 +154,6 @@ def distance_correction(dist, error_polynom):
     """
     dist = dist.astype('float32')
     error = np.polyval(error_polynom, dist)
-    # neglect measured distances below 1200
-    dist = np.where(dist < 1200, dist, dist-error)
+    dist -= error
 
     return dist

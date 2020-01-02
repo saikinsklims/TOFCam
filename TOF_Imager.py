@@ -163,7 +163,7 @@ class Thread(QThread):
         """
         # capture image from hardware
         imageData3D = self._image_epcDev.getDCSs()
-        
+
         dcsImages = []
         for i in range(imageData3D.shape[2]):
             dcsImages.append(imageData3D[:,:,i])
@@ -347,8 +347,8 @@ class Thread(QThread):
                 self.change_height.emit(height, pos_correct)
 
                 # get the direction
-                direction = self._get_direction(dist.copy(), img_avg)
-                self.change_direction.emit(direction)
+                #direction = self._get_direction(dist.copy(), img_avg)
+
 
                 # normalize gray image and convert to QImage and scale
                 img_view = dist.copy()
@@ -360,8 +360,8 @@ class Thread(QThread):
                 if height > config['min_object_height']:
                     img_view = cv2.circle(img_view, (pos[1], pos[0]),
                                           10, (0, 0, 255))
-                
-                
+
+
                 print("Circle dist:" + str(dist[pos[0], pos[1]]))
 
                 convertToQtFormat = QImage(img_view, img_width, img_height,
@@ -383,6 +383,11 @@ class Thread(QThread):
                 # different place and taller than 1000
                 limit = config['min_person_height']
                 if self._pos_buffer == [0, 0] and height > limit:
+                    if pos[0] < 30:
+                        direction = 1
+                    else:
+                        direction = 0
+                    self.change_direction.emit(direction)
                     # tmp = self._pos_buffer
                     # diff_x = abs(tmp[0] - pos[0])
                     # if diff_x > 30:

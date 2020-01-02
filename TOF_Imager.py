@@ -212,21 +212,21 @@ class Thread(QThread):
         height = 0
 
         base_height = np.median(background)
-        print("Base height: " + str(base_height))
+        #print("Base height: " + str(base_height))
 
         # thresholding first
         image[image > background - self._threshold] = base_height
 
         # shift and flip
-        image = -1*(image - base_height)
+        image = -(image - base_height)
 
         # some gaussian blurring
-        img_blur = cv2.GaussianBlur(image, (15,5), 7)
+        img_blur =cv2.medianBlur(image,11) #cv2.GaussianBlur(image, (15,5), 7)
 
         # get the height
         height = np.max(img_blur)
         height = round(height, 2)
-        print("Height: " + str(height))
+        #print("Height: " + str(height))
 
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
@@ -362,7 +362,7 @@ class Thread(QThread):
                                           10, (0, 0, 255))
 
 
-                print("Circle dist:" + str(dist[pos[0], pos[1]]))
+                #print("Circle heigt:" + str(dist[pos[0], pos[1]]))
 
                 convertToQtFormat = QImage(img_view, img_width, img_height,
                                            QImage.Format_RGB888)
@@ -497,8 +497,10 @@ class App(QMainWindow):
         None.
 
         """
-        self._counter = -1
-        self._increment_counter()
+        self._counter = 0
+        self.count_label.setText('{}'.format(self._counter))
+#        self._counter = -1
+#        self._increment_counter()
 
     @pyqtSlot(int)
     def _auto_background(self, state):

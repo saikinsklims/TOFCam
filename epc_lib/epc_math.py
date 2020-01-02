@@ -10,26 +10,17 @@ DCS-images as well as additional stuff.
 
 import numpy as np
 
-# define variables
-d_unamb = {20: 7500, 10: 15000, 5: 30000, 2.5: 60000, 1.25: 120000}
 
-c = 3e8
-f_led = 20e6
-distanceFactor = c / f_led / np.pi / 4
-
-
-def calc_dist_phase(dcs, led_mod_freq, d_offset):
+def calc_dist_phase(dcs, led_mod_freq):
     """
     Calculate the amplite and phase image from the dcs
 
     Parameters
     ----------
-    dcs : numpy array, shape (height, 4, width)
+    dcs : numpy array, shape (height, width, 4)
         A numpy array containing the 4 DCS-images
     led_mod_freq : int
         The LED modulation frequency in MHz.
-    d_offset : float
-        Constant distant offset in milli meter
 
     Returns
     -------
@@ -39,29 +30,25 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
         The phase image in radians.
 
     """
+    c = 3e8
+    f_led = led_mod_freq * 1E6
+    distanceFactor = c / f_led / np.pi / 4
+
+    dcsImages = []
+    for i in range(dcs.shape[2]):
+        dcsImages.append(dcs[:, :, i].astype(np.int32))
     dist = np.array([]).astype(np.int32)
-    
-    diffD2D0 = (dcs[2].astype(np.int32) - dcs[0].astype(np.int32))
-    diffD3D1 = (dcs[3].astype(np.int32) - dcs[1].astype(np.int32))
-	
-    
+
+    dist = np.array([]).astype(np.int32)
+
+    diffD2D0 = (dcsImages[2] - dcsImages[0])
+    diffD3D1 = (dcsImages[3] - dcsImages[1])
+
     phase = np.arctan2(diffD3D1, diffD2D0)
-#    
-#    phase = np.arctan2((dcs[:, :, 3].astype(np.int32) - dcs[:, :, 1].astype(np.int32)),
-#                       (dcs[:, :, 2].astype(np.int32) - dcs[:, :, 0].astype(np.int32)))
     phase += np.pi
 
-    dist = distanceFactor * phase  # unit m   
-    dist *= 1000 # in mm
-
-    #dist += d_offset
-    
-    #print(dist[60,30])
-
-#    # take distance roll over into account
-#    dist[dist > d_unamb[led_mod_freq]] -= d_unamb[led_mod_freq]
-#    dist[dist < 0] += d_unamb[led_mod_freq]
-    
+    dist = distanceFactor * phase  # unit m
+    dist *= 1000  # in mm
 
     return dist.transpose(), phase.transpose()
 
@@ -72,7 +59,7 @@ def calc_amplitude(dcs):
 
     Parameters
     ----------
-    dcs : numpy array, shape (height, 4, width)
+    dcs : numpy array, shape (height, width, 4)
         A numpy array containing the 4 DCS-images
 
     Returns
@@ -168,10 +155,10 @@ def distance_correction(dist, error_polynom, dist_offset):
 
     """
     dist = dist.astype('float32')
-    
+
     dist -= dist_offset
     dist -= np.polyval(error_polynom, dist)
-    
-    #print("Distance: "+ str(dist[30,60]))
+
+    # print("Distance: "+ str(dist[30,60]))
 
     return dist

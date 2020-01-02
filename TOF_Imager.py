@@ -25,6 +25,7 @@ from epc_lib import epc_math
 from imgProc import imgProcScale
 from imager import imager
 
+import time
 
 # TODO for testing purposes only
 # import pdb
@@ -162,19 +163,14 @@ class Thread(QThread):
 
         """
         # capture image from hardware
-        imageData3D = self._image_epcDev.getDCSs()
+        dcs = self._image_epcDev.getDCSs()
 
-        dcsImages = []
-        for i in range(imageData3D.shape[2]):
-            dcsImages.append(imageData3D[:,:,i])
-            #dcs_rotated = imgProc.imgRotate(dcs_i)
-            #dscImages.append(dcs_i)
         # calculate the distance, phase and amplitude
-        dist, phase = epc_math.calc_dist_phase(dcsImages, config['mod_frequ'],
-                                               config['dist_offset'])
+        dist, phase = epc_math.calc_dist_phase(dcs, config['mod_frequ'])
         # correction of the distance error
-        dist = epc_math.distance_correction(dist, config['error_polynom'], config['dist_offset'])
-        ampl = epc_math.calc_amplitude(imageData3D)
+        dist = epc_math.distance_correction(dist, config['error_polynom'],
+                                            config['dist_offset'])
+        ampl = epc_math.calc_amplitude(dcs)
 
         # TODO for testing
         # dist = next(self.pool_data).astype('float32')
@@ -346,10 +342,6 @@ class Thread(QThread):
                                                             img_avg)
                 self.change_height.emit(height, pos_correct)
 
-                # get the direction
-                #direction = self._get_direction(dist.copy(), img_avg)
-
-
                 # normalize gray image and convert to QImage and scale
                 img_view = dist.copy()
                 img_view = img_view / 2**12 * 255
@@ -383,14 +375,15 @@ class Thread(QThread):
                 # different place and taller than 1000
                 limit = config['min_person_height']
                 if self._pos_buffer == [0, 0] and height > limit:
+                    # check if person enters in upper or lower half
+                    # assuming it keeps direction
                     if pos[0] < 30:
                         direction = 1
                     else:
                         direction = 0
                     self.change_direction.emit(direction)
-                    # tmp = self._pos_buffer
-                    # diff_x = abs(tmp[0] - pos[0])
-                    # if diff_x > 30:
+                    # give application time to redraw GUI
+                    time.sleep(0.001)
                     self.new_person.emit()
                 elif height < limit:
                     pos = [0, 0]

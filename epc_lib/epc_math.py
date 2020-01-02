@@ -13,6 +13,10 @@ import numpy as np
 # define variables
 d_unamb = {20: 7500, 10: 15000, 5: 30000, 2.5: 60000, 1.25: 120000}
 
+c = 3e8
+f_led = 20e6
+distanceFactor = c / f_led / np.pi / 4
+
 
 def calc_dist_phase(dcs, led_mod_freq, d_offset):
     """
@@ -35,18 +39,29 @@ def calc_dist_phase(dcs, led_mod_freq, d_offset):
         The phase image in radians.
 
     """
-
-    dcs = dcs.astype(float)
-    phase = np.arctan2((dcs[:, :, 3] - dcs[:, :, 1]),
-                       (dcs[:, :, 2] - dcs[:, :, 0]))
+    dist = np.array([]).astype(np.int32)
+    
+    diffD2D0 = (dcs[2].astype(np.int32) - dcs[0].astype(np.int32))
+    diffD3D1 = (dcs[3].astype(np.int32) - dcs[1].astype(np.int32))
+	
+    
+    phase = np.arctan2(diffD3D1, diffD2D0)
+#    
+#    phase = np.arctan2((dcs[:, :, 3].astype(np.int32) - dcs[:, :, 1].astype(np.int32)),
+#                       (dcs[:, :, 2].astype(np.int32) - dcs[:, :, 0].astype(np.int32)))
     phase += np.pi
 
-    dist = d_unamb[led_mod_freq] / 2 / np.pi * phase  # unit mm
-    dist += d_offset
+    dist = distanceFactor * phase  # unit m   
+    dist *= 1000 # in mm
 
-    # take distance roll over into account
-    dist[dist > d_unamb[led_mod_freq]] -= d_unamb[led_mod_freq]
-    dist[dist < 0] += d_unamb[led_mod_freq]
+    #dist += d_offset
+    
+    #print(dist[60,30])
+
+#    # take distance roll over into account
+#    dist[dist > d_unamb[led_mod_freq]] -= d_unamb[led_mod_freq]
+#    dist[dist < 0] += d_unamb[led_mod_freq]
+    
 
     return dist.transpose(), phase.transpose()
 
@@ -135,7 +150,7 @@ def check_signal_quality(ampl, gray, exposure):
     return quality, noise
 
 
-def distance_correction(dist, error_polynom):
+def distance_correction(dist, error_polynom, dist_offset):
     """
     Correction of the systematic distance error by polynom error fit
 
@@ -153,7 +168,10 @@ def distance_correction(dist, error_polynom):
 
     """
     dist = dist.astype('float32')
-    error = np.polyval(error_polynom, dist)
-    dist -= error
+    
+    dist -= dist_offset
+    dist -= np.polyval(error_polynom, dist)
+    
+    #print("Distance: "+ str(dist[30,60]))
 
     return dist

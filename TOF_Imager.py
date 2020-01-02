@@ -162,13 +162,19 @@ class Thread(QThread):
 
         """
         # capture image from hardware
-        img = self._image_epcDev.getDCSs()
+        imageData3D = self._image_epcDev.getDCSs()
+        
+        dcsImages = []
+        for i in range(imageData3D.shape[2]):
+            dcsImages.append(imageData3D[:,:,i])
+            #dcs_rotated = imgProc.imgRotate(dcs_i)
+            #dscImages.append(dcs_i)
         # calculate the distance, phase and amplitude
-        dist, phase = epc_math.calc_dist_phase(img, config['mod_frequ'],
+        dist, phase = epc_math.calc_dist_phase(dcsImages, config['mod_frequ'],
                                                config['dist_offset'])
         # correction of the distance error
-        dist = epc_math.distance_correction(dist, config['error_polynom'])
-        ampl = epc_math.calc_amplitude(img)
+        dist = epc_math.distance_correction(dist, config['error_polynom'], config['dist_offset'])
+        ampl = epc_math.calc_amplitude(imageData3D)
 
         # TODO for testing
         # dist = next(self.pool_data).astype('float32')
@@ -205,20 +211,22 @@ class Thread(QThread):
         """
         height = 0
 
-        base_height = np.mean(background)
+        base_height = np.median(background)
+        print("Base height: " + str(base_height))
 
         # thresholding first
         image[image > background - self._threshold] = base_height
 
         # shift and flip
-        image = -(image - base_height)
+        image = -1*(image - base_height)
 
         # some gaussian blurring
-        img_blur = cv2.GaussianBlur(image, (15, 5), 7)
+        img_blur = cv2.GaussianBlur(image, (15,5), 7)
 
         # get the height
         height = np.max(img_blur)
         height = round(height, 2)
+        print("Height: " + str(height))
 
         # get x-position of height
         tmp_pos = np.argmax(img_blur)
@@ -352,6 +360,9 @@ class Thread(QThread):
                 if height > config['min_object_height']:
                     img_view = cv2.circle(img_view, (pos[1], pos[0]),
                                           10, (0, 0, 255))
+                
+                
+                print("Circle dist:" + str(dist[pos[0], pos[1]]))
 
                 convertToQtFormat = QImage(img_view, img_width, img_height,
                                            QImage.Format_RGB888)
